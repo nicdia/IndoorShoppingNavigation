@@ -1,12 +1,9 @@
--- Alle Produkte mit Koordinaten (für Map & Suche)
 CREATE VIEW IF NOT EXISTS v_product_map AS
 SELECT
   p.product_id,
-  p.product_code,
   p.product_name,
   p.product_level,
-  pl.product_product_id,
-  pl.node_node_id                 AS node_id,
+  pl.node_node_id                 
   n.node_x,
   n.node_y
 FROM products p
