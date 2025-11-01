@@ -9,3 +9,6 @@ SELECT
 FROM products p
 LEFT JOIN product_locations pl ON pl.product_product_id = p.product_id
 LEFT JOIN nodes n              ON n.node_id            = pl.node_node_id;
+
+
+
