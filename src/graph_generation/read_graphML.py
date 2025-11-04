@@ -11,7 +11,7 @@ def main():
 	base = os.path.dirname(__file__) or '.'
 	path = os.path.join(base, 'graph.graphml')
 	if not os.path.exists(path):
-		print(f"Error: '{path}' not found. Make sure the file is in the same folder.")
+		print(f"Error: '{path}' not found.")
 		return
 
 	G = nx.read_graphml(path)
