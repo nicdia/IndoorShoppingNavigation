@@ -1,3 +1,7 @@
+# Script to showcase how to read a GraphML file 
+
+# ------- Not directly necessary for the project -------
+
 import os
 import networkx as nx
 from itertools import islice
@@ -7,13 +11,13 @@ def main():
 	base = os.path.dirname(__file__) or '.'
 	path = os.path.join(base, 'graph.graphml')
 	if not os.path.exists(path):
-		print(f"Fehler: '{path}' nicht gefunden. Stelle sicher, dass die Datei im gleichen Ordner liegt.")
+		print(f"Error: '{path}' not found. Make sure the file is in the same folder.")
 		return
 
 	G = nx.read_graphml(path)
-	print(f"Graph geladen: {G.number_of_nodes()} Knoten, {G.number_of_edges()} Kanten")
+	print(f"Graph loaded: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
 
-	# sammle Attribut-Namen (Spalten) für Knoten und Kanten
+	# Collect attribute names (columns) for nodes and edges
 	node_keys = set()
 	for _, data in G.nodes(data=True):
 		node_keys.update(data.keys())
@@ -22,26 +26,26 @@ def main():
 	for _, _, data in G.edges(data=True):
 		edge_keys.update(data.keys())
 
-	print('\nKnoten-Attribute (Spalten):')
+	print('\nNode Attributes (Columns):')
 	if node_keys:
 		for k in sorted(node_keys):
 			print(' -', k)
 	else:
-		print(' (keine Knotendaten)')
+		print(' (no node data)')
 
-	print('\nKanten-Attribute (Spalten):')
+	print('\nEdge Attributes (Columns	):')
 	if edge_keys:
 		for k in sorted(edge_keys):
 			print(' -', k)
 	else:
-		print(' (keine Kantendaten)')
+		print(' (no edge data)')
 
-	# Beispiele ausgeben
-	print('\nErste 10 Knoten (id, attributes):')
+	# Show examples
+	print('\nFirst 10 Nodes (id, attributes):')
 	for n, data in islice(G.nodes(data=True), 10):
 		print(n, data)
 
-	print('\nErste 10 Kanten (u, v, attributes):')
+	print('\nFirst 10 Edges (u, v, attributes):')
 	for u, v, data in islice(G.edges(data=True), 10):
 		print(u, v, data)
 
