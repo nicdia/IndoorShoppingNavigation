@@ -1,4 +1,5 @@
-"""Extract shelf and wall polygons from the DXF and export them as JSON for the frontend."""
+# This script reads the dxf file (grocery store lyout) and transforms it into a json file
+# This is needed to show it in the frontend
 from __future__ import annotations
 
 import json
