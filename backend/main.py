@@ -16,6 +16,9 @@ app.add_middleware(
 @app.get("/products")
 def get_products():
     """Return a mock catalog of products."""
+
+    # TODO: Hier muss dann einfach eine DB Abfrage hin um alle Produkte zu bekommen
+    #       Das muss dann einfach nur als JSON formatiert werden
     return {
         "items": [
             {"id": "41", "name": "Kiwi"},
@@ -29,6 +32,15 @@ def get_products():
 
 @app.post("/route")
 def calculate_route():
+    # TODO: Das hier ist dann im wesentlichen das Ergebnis aus dem Algorithmus
+    # Also in diesem Script die Funktion importieren, in dieser Funktion aufrufen, wobei man 
+    #  bei dem Endpunkt dann einmal die Produkte hinschickt die im Frontend ausgewählt wurden.
+    # Das muss dann nochmal mit Daten aus einer Weiteren DB Abfrage kombiniert werden, die zu den 
+    # Produkten immer das Level ausgibt. Alternativ könnte das auch in dem Skript vom Algorithmus gemacht werden.
+    # Bei der Arbeit haben wir in einem Projekt noch so "Services" dazwischen gestellt. Dann hätte
+    # man eine Klasse Routing_Service oder so und würde die dann hier nur aufrufen. Das wäre wohl 
+    # am saubersten. Man könnte es aber auch einfach hier machen oder halt die Funktion einfach aufrufen.      
+
     """Return a mock route response that mirrors the expected pathfinding output."""
     return {
         "order": [
