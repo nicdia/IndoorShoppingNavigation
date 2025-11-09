@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { ProductList } from "./components/ProductList";
 import { MapPreview } from "./components/MapPreview";
 import { SelectedChecklist } from "./components/SelectedChecklist";
@@ -23,6 +23,7 @@ function App() {
   const [completed, setCompleted] = useState<boolean[]>([]);
   const [view, setView] = useState<"select" | "route">("select");
   const [layoutPolygons, setLayoutPolygons] = useState<StorePolygon[] | null>(null);
+  const [mapPanelSize, setMapPanelSize] = useState<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
     setProductsLoading(true);
@@ -156,6 +157,12 @@ function App() {
     setActiveIndex(0);
   }, [routeItems.length, routeSignature, view]);
 
+  useEffect(() => {
+    if (view !== "route") {
+      setMapPanelSize(null);
+    }
+  }, [view]);
+
   const directions = useMemo(() => {
     return activeRoute.segments.map((segment) => {
       const origin = activeRoute.order.find((step) => step.nodeId === segment.from);
@@ -168,6 +175,13 @@ function App() {
       return `Walk ${segment.distance.toFixed(1)} meters from ${originLabel} to ${destinationLabel}.`;
     });
   }, [activeRoute]);
+
+  const contentGridStyle = useMemo<CSSProperties | undefined>(() => {
+    if (!mapPanelSize) {
+      return undefined;
+    }
+    return { "--map-panel-height": `${mapPanelSize.height}px` } as CSSProperties;
+  }, [mapPanelSize]);
 
   const toggleProduct = (id: number) => {
     setSelectedProducts((previous) => {
@@ -198,6 +212,15 @@ function App() {
   const handleSetActive = (index: number) => {
     setActiveIndex(index);
   };
+
+  const handleMapDimensionsChange = useCallback((size: { width: number; height: number }) => {
+    setMapPanelSize((previous) => {
+      if (previous && previous.width === size.width && previous.height === size.height) {
+        return previous;
+      }
+      return size;
+    });
+  }, []);
 
   const handleShowRoute = async () => {
     if (selectedProducts.length === 0 || isLoadingRoute) {
@@ -278,7 +301,7 @@ function App() {
               Edit selection
             </button>
           </div>
-          <div className="content-grid">
+          <div className="content-grid" style={contentGridStyle}>
             <MapPreview
               path={enrichedPath}
               segments={activeSegments}
@@ -286,6 +309,7 @@ function App() {
               currentNodeId={currentNodeId}
               targetNodeId={targetNodeId}
               polygons={layoutPolygons ?? undefined}
+              onDimensionsChange={handleMapDimensionsChange}
             />
             <RouteSummary totalDistance={activeRoute.totalDistance} directions={directions} />
             <SelectedChecklist

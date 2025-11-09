@@ -4,6 +4,11 @@
   background-color: #f8fafc;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -15,15 +20,18 @@ a {
 
 #root {
   min-height: 100vh;
+  display: flex;
 }
 
 .app-shell {
   display: flex;
   flex-direction: column;
-  gap: 32px;
-  padding: 32px 40px 48px;
+  gap: 28px;
+  padding: 28px 36px 40px;
   max-width: 1280px;
   margin: 0 auto;
+  flex: 1;
+  width: 100%;
 }
 
 .section-header {
@@ -115,13 +123,21 @@ a {
 
 .content-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.85fr) minmax(0, 0.85fr);
+  grid-template-columns: auto minmax(260px, 320px) minmax(260px, 320px);
   gap: 24px;
   align-items: stretch;
+  justify-content: flex-start;
+  grid-auto-rows: minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  width: fit-content;
+  max-width: 100%;
+  max-height: max(420px, calc(100vh - 200px));
+  --map-panel-height: auto;
 }
 
 .content-grid > * {
-  min-height: 100%;
+  min-height: 0;
 }
 
 .map-preview,
@@ -135,13 +151,26 @@ a {
 }
 
 .map-preview {
-  min-height: 540px;
+  justify-self: start;
+  align-items: flex-start;
+  min-height: 0;
 }
 
-.map-preview svg {
-  width: 100%;
-  height: 100%;
+.map-frame {
   flex: 1;
+  display: flex;
+  width: 100%;
+  align-items: stretch;
+  justify-content: center;
+  min-height: 0;
+  height: 100%;
+}
+
+.map-frame svg {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: 100%;
   border-radius: 16px;
   overflow: hidden;
 }
@@ -252,6 +281,13 @@ a {
   height: 18px;
 }
 
+.checklist,
+.route-summary {
+  height: var(--map-panel-height, auto);
+  max-height: var(--map-panel-height, none);
+  overflow: auto;
+}
+
 .route-summary {
   background: #ffffff;
   border-radius: 20px;
@@ -334,11 +370,17 @@ a {
 
 @media (max-width: 1140px) {
   .content-grid {
-    grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr);
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+    grid-auto-rows: auto;
+    justify-content: stretch;
+    width: 100%;
+    max-height: none;
+    --map-panel-height: auto;
   }
 
   .content-grid > :nth-child(1) {
     grid-column: 1 / -1;
+    width: 100%;
   }
 }
 
@@ -349,9 +391,26 @@ a {
 
   .content-grid {
     grid-template-columns: 1fr;
+    grid-auto-rows: auto;
+    max-height: none;
+    justify-content: stretch;
+    width: 100%;
+    --map-panel-height: auto;
   }
 
   .map-preview {
-    min-height: 420px;
+    width: 100%;
+  }
+}
+
+@media (max-height: 760px) {
+  .content-grid {
+    max-height: none;
+    width: 100%;
+    --map-panel-height: auto;
+  }
+
+  .map-preview {
+    width: 100%;
   }
 }

@@ -18,10 +18,11 @@ def get_products():
     """Return a mock catalog of products."""
     return {
         "items": [
-            {"id": "41", "name": "Kiwi", "level": 99, "category": "Fruit"},
-            {"id": "61", "name": "Apple", "level": 99, "category": "Fruit"},
-            {"id": "126", "name": "Sausage", "level": 1, "category": "Meat"},
-            {"id": "139", "name": "Peanut", "level": 1, "category": "Snacks"},
+            {"id": "41", "name": "Kiwi"},
+            {"id": "61", "name": "Apple"},
+            {"id": "126", "name": "Sausage"},
+            {"id": "139", "name": "Peanut"},
+            {"id": "142", "name": "Almond"},
         ]
     }
 
@@ -32,8 +33,8 @@ def calculate_route():
     return {
         "order": [
             {"nodeId": "21", "type": "entry"},
-            {"nodeId": "41", "type": "item", "productId": "41", "productName": "Kiwi"},
-            {"nodeId": "61", "type": "item", "productId": "61", "productName": "Apple"},
+            {"nodeId": "41", "type": "item", "productId": "41", "productName": "Kiwi", "level": 1},
+            {"nodeId": "61", "type": "item", "productId": "61", "productName": "Apple", "level": 1},
             {"nodeId": "14", "type": "checkout"},
         ],
         "path": [
