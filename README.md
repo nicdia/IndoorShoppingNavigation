@@ -116,3 +116,13 @@ to do -- graph muss die exge tabelle erreichen + curl aufruf muss funktionieren
 curl -X POST http://localhost:3001/api/route/ \
   -H "Content-Type: application/json" \
   -d '{"product_names":["Kiwi","Apple","Banana"]}'  
+
+  Endpoints
+  # Backend
+Starten vom Hauptverzeichnis aus: python3 src/app/server/app.py  # → läuft auf http://127.0.0.1:8000
+
+# Tests
+curl http://127.0.0.1:8000/api/health
+curl http://127.0.0.1:8000/products
+curl -X POST http://127.0.0.1:8000/route -H "Content-Type: application/json" \
+  -d '{"productCodes":[2,3,4]}'
