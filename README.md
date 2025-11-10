@@ -123,6 +123,96 @@ Starten vom Hauptverzeichnis aus: python3 src/app/server/app.py  # → läuft au
 
 # Tests
 curl http://127.0.0.1:8000/api/health
+
+{
+  "status": "ok",
+  "timestamp": "2025-11-10T18:14:04.283608"
+}
+
+
+
 curl http://127.0.0.1:8000/products
+
+{
+  "items": [
+    {
+      "id": 2,
+      "level": 99,
+      "name": "Kiwi",
+      "nodeId": 41
+    },
+    {
+      "id": 3,
+      "level": 99,
+      "name": "Apple",
+      "nodeId": 61
+    },
+    {
+      "id": 4,
+      "level": 99,
+      "name": "Banana",
+      "nodeId": 59
+    },
+    {
+      "id": 5,
+      "level": 99,
+      "name": "Orange",
+      "nodeId": 57
+    },
+
 curl -X POST http://127.0.0.1:8000/route -H "Content-Type: application/json" \
   -d '{"productCodes":[2,3,4]}'
+
+
+  {
+  "order": [
+    "41",
+    "61",
+    "59"
+  ],
+  "products": [
+    {
+      "name": "Kiwi",
+      "node_id": "41",
+      "product_id": 2
+    },
+    {
+      "name": "Apple",
+      "node_id": "61",
+      "product_id": 3
+    },
+    {
+      "name": "Banana",
+      "node_id": "59",
+      "product_id": 4
+    }
+  ],
+  "segments": [
+    {
+      "cost": 3.0,
+      "disconnected": true,
+      "from": "41",
+      "path": [
+        "41",
+        "61"
+      ],
+      "to": "61"
+    },
+    {
+      "cost": 4.0,
+      "disconnected": true,
+      "from": "61",
+      "path": [
+        "61",
+        "59"
+      ],
+      "to": "59"
+    }
+  ],
+  "total_cost": 7.0,
+  "way_nodes": [
+    "41",
+    "61",
+    "59"
+  ]
+}
