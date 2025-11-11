@@ -61,3 +61,26 @@ def fetch_edges():
     rows = cur.fetchall()
     cur.close()
     return [dict(r) for r in rows]
+
+def fetch_node_coordinates_by_ids(node_ids):
+    """Liefert zu einer Liste von Node-IDs deren Koordinaten."""
+    if not node_ids:
+        return {}
+
+    cleaned = [str(node_id).strip() for node_id in node_ids if str(node_id).strip()]
+    if not cleaned:
+        return {}
+
+    placeholders = ",".join(["?"] * len(cleaned))
+    sql = f"""
+        SELECT
+            node_id,
+            node_x,
+            node_y
+        FROM nodes
+        WHERE node_id IN ({placeholders})
+    """
+    cur = get_conn().execute(sql, cleaned)
+    rows = cur.fetchall()
+    cur.close()
+    return {str(row["node_id"]): {"x": float(row["node_x"]), "y": float(row["node_y"])} for row in rows}

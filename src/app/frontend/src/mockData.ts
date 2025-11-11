@@ -14,11 +14,24 @@ export type RouteNode = {
   productId?: number;
 };
 
+export type NodeCoordinate = {
+  x: number;
+  y: number;
+};
+
+export type WaypointCoordinate = {
+  node_id: string;
+  x: number;
+  y: number;
+};
+
 export type RouteSegment = {
   from: string;
   to: string;
-  distance: number;
   path: string[];
+  cost: number;
+  disconnected?: boolean;
+  path_coordinates?: WaypointCoordinate[];
 };
 
 export type StorePolygon = {
@@ -27,21 +40,19 @@ export type StorePolygon = {
 };
 
 export type RouteData = {
-  order: Array<{
-    nodeId: string;
-    type: "entry" | "item" | "checkout";
-    productId?: number;
-    productName?: string;
+  order: string[];
+  products: Array<{
+    product_id: number;
+    name: string;
+    node_id: string;
+    node_x?: number;
+    node_y?: number;
   }>;
-  path: RouteNode[];
   segments: RouteSegment[];
-  totalDistance: number;
-  metadata: {
-    entry: string;
-    checkout: string;
-    selectedProducts: number[];
-    units: string;
-  };
+  total_cost: number;
+  way_nodes: string[];
+  node_coordinates?: Record<string, NodeCoordinate>;
+  waypoint_coordinates?: WaypointCoordinate[];
 };
 
 export const mockProducts: Product[] = [
@@ -54,31 +65,46 @@ export const mockProducts: Product[] = [
 ];
 
 export const mockRoute: RouteData = {
-  order: [
-    { nodeId: "21", type: "entry" },
-    { nodeId: "41", type: "item", productId: 41, productName: "Kiwi" },
-    { nodeId: "61", type: "item", productId: 61, productName: "Apple" },
-    { nodeId: "14", type: "checkout" }
+  order: ["41", "61", "59"],
+  products: [
+    { product_id: 2, name: "Kiwi", node_id: "41", node_x: 1.0, node_y: 6.0 },
+    { product_id: 3, name: "Apple", node_id: "61", node_x: 1.0, node_y: 9.0 },
+    { product_id: 4, name: "Banana", node_id: "59", node_x: 1.0, node_y: 13.0 }
   ],
-  path: [
-    { nodeId: "21", x: 2.0, y: 2.0 },
-    { nodeId: "1", x: 2.0, y: 4.0 },
-    { nodeId: "41", x: 1.0, y: 6.0 },
-    { nodeId: "2", x: 2.0, y: 20.0 },
-    { nodeId: "37", x: 7.0, y: 19.0 },
-    { nodeId: "61", x: 11.0, y: 20.0 },
-    { nodeId: "14", x: 15.0, y: 6.0 }
-  ] satisfies RouteNode[],
   segments: [
-    { from: "21", to: "41", distance: 4.2, path: ["21", "1", "41"] },
-    { from: "41", to: "61", distance: 16.8, path: ["41", "1", "2", "37", "61"] },
-    { from: "61", to: "14", distance: 11.4, path: ["61", "12", "13", "14"] }
-  ] satisfies RouteSegment[],
-  totalDistance: 32.4,
-  metadata: {
-    entry: "21",
-    checkout: "14",
-    selectedProducts: [41, 61],
-    units: "meters"
-  }
+    {
+      from: "41",
+      to: "61",
+      cost: 3.0,
+      path: ["41", "61"],
+      disconnected: true,
+      path_coordinates: [
+        { node_id: "41", x: 1.0, y: 6.0 },
+        { node_id: "61", x: 1.0, y: 9.0 }
+      ]
+    },
+    {
+      from: "61",
+      to: "59",
+      cost: 4.0,
+      path: ["61", "59"],
+      disconnected: true,
+      path_coordinates: [
+        { node_id: "61", x: 1.0, y: 9.0 },
+        { node_id: "59", x: 1.0, y: 13.0 }
+      ]
+    }
+  ],
+  total_cost: 7.0,
+  way_nodes: ["41", "61", "59"],
+  node_coordinates: {
+    "41": { x: 1.0, y: 6.0 },
+    "61": { x: 1.0, y: 9.0 },
+    "59": { x: 1.0, y: 13.0 }
+  },
+  waypoint_coordinates: [
+    { node_id: "41", x: 1.0, y: 6.0 },
+    { node_id: "61", x: 1.0, y: 9.0 },
+    { node_id: "59", x: 1.0, y: 13.0 }
+  ]
 };

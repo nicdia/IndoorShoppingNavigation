@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RouteNode, RouteSegment, StorePolygon } from "../mockData";
 
 type MapPreviewProps = {
@@ -82,7 +82,23 @@ export function MapPreview({
   polygons,
   onDimensionsChange,
 }: MapPreviewProps) {
-  const { projectedNodes, projectedPolygons, canvasWidth, canvasHeight } = projectGeometry(path, polygons);
+  const augmentedPath = useMemo(() => {
+    const map = new Map<string, RouteNode>();
+    for (const node of path) {
+      map.set(node.nodeId, node);
+    }
+    for (const segment of segments) {
+      segment.path_coordinates?.forEach((coord) => {
+        const nodeId = String(coord.node_id);
+        if (!map.has(nodeId)) {
+          map.set(nodeId, { nodeId, x: coord.x, y: coord.y });
+        }
+      });
+    }
+    return Array.from(map.values());
+  }, [path, segments]);
+
+  const { projectedNodes, projectedPolygons, canvasWidth, canvasHeight } = projectGeometry(augmentedPath, polygons);
   const lookup = new Map(projectedNodes.map((node) => [node.nodeId, node]));
   const currentNode = currentNodeId ? lookup.get(currentNodeId) : undefined;
   const targetNode = targetNodeId ? lookup.get(targetNodeId) : undefined;
@@ -158,6 +174,20 @@ export function MapPreview({
               />
             );
           })}
+          {projectedNodes.map((node) => (
+            <text
+              key={node.nodeId}
+              x={node.screenX + 6}
+              y={node.screenY - 6}
+              fontSize={"10px"}
+              fill="#222"
+              stroke="#fff"
+              strokeWidth={0.5}
+              style={{ pointerEvents: "none" }}
+            >
+              {node.nodeId}
+            </text>
+          ))}
           {currentNode && (
             <g className="current-node" transform={`translate(${currentNode.screenX}, ${currentNode.screenY})`}>
               <circle className="pulse" r={12} />
