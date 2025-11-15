@@ -1,11 +1,11 @@
-# criteria/runtime_criterion.py
+# metric_runtime.py
 import time
 from typing import Callable
 import networkx as nx
-from route_types import RouteResult
+
 
 def measure_runtime(
-    algorithm_fn: Callable[[nx.Graph, str, list[str], list[str]], RouteResult],
+    algorithm_fn: Callable[[nx.Graph, str, list[str], list[str]], dict],
     G: nx.Graph,
     entry: str,
     items: list[str],
@@ -14,6 +14,7 @@ def measure_runtime(
 ) -> float:
     """
     Misst die Laufzeit des Algorithmus in Sekunden (Durchschnitt über 'repeats' Läufe).
+    Erwartet, dass algorithm_fn ein Dict zurückgibt.
     """
     start = time.perf_counter()
     for _ in range(repeats):

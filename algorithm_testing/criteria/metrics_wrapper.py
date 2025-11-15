@@ -2,9 +2,10 @@
 from typing import Callable, Dict, Any
 import networkx as nx
 
-from metric_runtime import measure_runtime
-from metric_distance import distance_score
-from metric_turns import count_turns
+from .metric_runtime import measure_runtime
+from .metric_distance import distance_score
+from .metric_turns import count_turns
+
 
 
 def evaluate_all_criteria(

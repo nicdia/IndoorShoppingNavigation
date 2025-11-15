@@ -1,9 +1,8 @@
 # test.py
 import networkx as nx
 
-from metrics_wrapper import evaluate_all_criteria
-from algorithm_bnb import run_algorithm
-
+from criteria.metrics_wrapper import evaluate_all_criteria
+from algorithms.bnb_algorithm import run_algorithm
 
 def load_graph(path: str) -> nx.Graph:
     """
@@ -17,7 +16,7 @@ def load_graph(path: str) -> nx.Graph:
 
 if __name__ == "__main__":
     # --- Standard-Testsetting für alle Algorithmen ---
-    GRAPH_PATH = "./resources/shop_graph.graphml"
+    GRAPH_PATH = "../resources/graph.graphml"
 
     ENTRY = "21"
     CHECKOUTS = ["14", "15"]

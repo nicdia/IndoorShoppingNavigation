@@ -1,22 +1,31 @@
-# criteria/distance_criterion.py
+# metric_distance.py
 import networkx as nx
-from route_types import RouteResult
 
-def compute_distance_from_walk(G: nx.Graph, result: RouteResult) -> float:
+
+def compute_distance_from_walk(G: nx.Graph, result: dict) -> float:
     """
-    Berechnet die Distanz entlang des Walks im Graphen.
+    Berechnet die Distanz anhand von result["walk"].
     """
+    walk = result.get("walk", [])
     dist = 0.0
-    for u, v in zip(result.walk[:-1], result.walk[1:]):
+
+    for u, v in zip(walk[:-1], walk[1:]):
         edge_data = G.get_edge_data(u, v, default={})
         w = float(edge_data.get("weight", 1.0))
         dist += w
+
     return dist
 
-def distance_score(G: nx.Graph, result: RouteResult) -> float:
+
+def distance_score(G: nx.Graph, result: dict) -> float:
     """
-    Holt die Distanz aus RouteResult oder berechnet sie aus dem Walk.
+    Gibt die Distanz zurück.
+    Nutzt result["total_distance"], wenn vorhanden und > 0,
+    sonst berechnet es die Distanz aus dem Walk.
     """
-    if result.total_distance and result.total_distance > 0:
-        return float(result.total_distance)
+    total_dist = result.get("total_distance", None)
+
+    if total_dist is not None and total_dist > 0:
+        return float(total_dist)
+
     return compute_distance_from_walk(G, result)
