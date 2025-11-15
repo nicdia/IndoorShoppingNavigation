@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import sqlite3, xml.etree.ElementTree as ET
 
-DB = "shop_nav.db"
+DB = "indoor_shopping_nav.db"
 GRAPHML = "resources/graph.graphml"
 NS = {"g": "http://graphml.graphdrawing.org/xmlns"}
 

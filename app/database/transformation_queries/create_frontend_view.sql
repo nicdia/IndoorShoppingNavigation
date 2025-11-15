@@ -3,7 +3,7 @@ SELECT
   p.product_id,
   p.product_name,
   p.product_level,
-  pl.node_node_id                 
+  pl.node_node_id,              
   n.node_x,
   n.node_y
 FROM products p
