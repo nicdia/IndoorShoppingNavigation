@@ -1,0 +1,148 @@
+# ============================================================
+#  ALGORITHM BUILDING TUTORIAL (Routing-Testbench)
+#  ------------------------------------------------------------
+#  Für alle Devs: So müssen eure Routing-Algorithmen aufgebaut
+#  sein, damit die Metriken automatisch funktionieren.
+# ============================================================
+
+===============================================================
+1. WAS EURE FUNKTION ALS INPUT BEKOMMT
+===============================================================
+Euer Algorithmus MUSS genau diese Signatur haben:
+
+    def run_algorithm(G, entry, items, checkouts):
+
+Parameter:
+- G         : NetworkX-Graph (mit weight auf Kanten, x/y auf Nodes)
+- entry     : Startpunkt (z.B. "21")
+- items     : Liste von Zielknoten (z.B. ["41","61","59"])
+- checkouts : Liste möglicher Endpunkte (z.B. ["14","15"])
+
+Mehr braucht ihr nicht.
+
+
+===============================================================
+2. WAS EURE FUNKTION ALS OUTPUT ZURÜCKGEBEN MUSS
+===============================================================
+Euer Algorithmus MUSS ein Dict zurückgeben, GENAU SO:
+
+    {
+        "order": [...],          # logische Reihenfolge der Stops
+        "walk": [...],           # komplette Knotenfolge im Graphen
+        "total_distance": float  # Länge des Walks
+    }
+
+Details:
+
+"order"
+    Die Reihenfolge der wichtigen Punkte:
+    Beispiel: ["21", "41", "61", "59", "14"]
+
+"walk"
+    Die vollständige Route im Graphen, inklusive aller Zwischenknoten.
+    Beispiel: ["21","22","23","41","42","61","59","58","14"]
+
+"total_distance"
+    Ein Float, die Distanz entlang des Walks.
+
+
+===============================================================
+3. TEMPLATE FÜR EUCH (COPY/PASTE)
+===============================================================
+Benutzt dieses Grundgerüst:
+
+    def run_algorithm(G, entry, items, checkouts):
+        """
+        MUSS dieses Dict zurückgeben:
+        {
+            "order": [...],
+            "walk": [...],
+            "total_distance": float
+        }
+        """
+
+        # TODO: euren Algorithmus implementieren
+
+        # Dummy Beispiel (KEIN richtiger Algorithmus):
+        order = [entry] + items + [checkouts[0]]
+        walk = order[:]  # für echten Algo: richtige Pfade bauen
+        total_distance = 0.0
+
+        return {
+            "order": order,
+            "walk": walk,
+            "total_distance": total_distance
+        }
+
+
+===============================================================
+4. WAS IHR NICHT MACHEN DÜRFT
+===============================================================
+❌ Keine Klassen  
+❌ Kein anderes Rückgabeformat  
+❌ Keine Prints  
+❌ Keine Inputs  
+❌ Kein Plotten  
+❌ Keine globalen Abhängigkeiten  
+
+Nur:
+    run_algorithm → Dict zurückgeben
+
+
+===============================================================
+5. BEISPIEL: BnB (verkürzt & korrekt formatiert)
+===============================================================
+    def run_algorithm(G, entry, items, checkouts):
+        relevant = [entry] + items + checkouts
+        dist, spath = compute_pairwise_dijkstra(G, relevant)
+
+        if items:
+            best_order, best_cost = bnb(entry, items, 0.0, [entry], dist, checkouts, (None, float("inf")))
+        else:
+            best_order = [entry] + [min(checkouts, key=lambda c: dist[entry][c])]
+            best_cost = dist[entry][best_order[-1]]
+
+        walk = []
+        for a, b in zip(best_order[:-1], best_order[1:]):
+            seg = spath[a][b]
+            walk.extend(seg if not walk else seg[1:])
+
+        return {
+            "order": best_order,
+            "walk": walk,
+            "total_distance": float(best_cost)
+        }
+
+
+===============================================================
+6. WARUM DIESE STRUKTUR?
+===============================================================
+Damit die Testbench automatisch funktioniert:
+
+    results = evaluate_all_criteria(
+        run_algorithm,
+        G,
+        entry,
+        items,
+        checkouts
+    )
+
+Und wir bekommen:
+- Distanz
+- Turns
+- Laufzeit
+- Vergleichbarkeit aller Algorithmen
+
+
+===============================================================
+7. TL;DR FÜR SCHNELLE DEVS
+===============================================================
+✔ run_algorithm(G, entry, items, checkouts)  
+✔ return {
+      "order": [...],
+      "walk": [...],
+      "total_distance": float
+  }
+
+Wenn ihr das einhaltet → läuft alles automatisch.
+===============================================================
