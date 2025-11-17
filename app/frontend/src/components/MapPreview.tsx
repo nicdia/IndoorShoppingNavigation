@@ -174,20 +174,7 @@ export function MapPreview({
               />
             );
           })}
-          {projectedNodes.map((node) => (
-            <text
-              key={node.nodeId}
-              x={node.screenX + 6}
-              y={node.screenY - 6}
-              fontSize={"10px"}
-              fill="#222"
-              stroke="#fff"
-              strokeWidth={0.5}
-              style={{ pointerEvents: "none" }}
-            >
-              {node.nodeId}
-            </text>
-          ))}
+          {/* Node-ID Overlay entfernt (nur für Debugging genutzt) */}
           {currentNode && (
             <g className="current-node" transform={`translate(${currentNode.screenX}, ${currentNode.screenY})`}>
               <circle className="pulse" r={12} />
