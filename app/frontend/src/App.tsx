@@ -210,8 +210,18 @@ function App() {
     return map;
   }, [activeRoute, coordinateLookup]);
 
+  const productLevelMap = useMemo(() => {
+    const map = new Map<number, number | null>();
+    for (const product of products) {
+      if (typeof product.id === "number") {
+        map.set(product.id, product.level ?? null);
+      }
+    }
+    return map;
+  }, [products]);
+
   const routeItems = useMemo(() => {
-    const items: { productId: number; productName: string; nodeId: string }[] = [];
+    const items: { productId: number; productName: string; nodeId: string; level?: number | null }[] = [];
     const orderedNodeIds =
       Array.isArray(activeRoute.order) && activeRoute.order.length > 0
         ? activeRoute.order.map((nodeId) => String(nodeId))
@@ -225,10 +235,12 @@ function App() {
       for (const product of productsAtNode) {
         const fallbackId = Number(nodeId);
         const numericId = product.productId ?? (Number.isFinite(fallbackId) ? fallbackId : items.length);
+        const resolvedId = Number.isFinite(numericId) ? Number(numericId) : items.length;
         items.push({
-          productId: Number.isFinite(numericId) ? numericId : items.length,
+          productId: resolvedId,
           productName: product.productName,
           nodeId,
+          level: productLevelMap.get(resolvedId) ?? null,
         });
       }
     }
@@ -243,9 +255,10 @@ function App() {
         productId: id,
         productName: product?.name ?? "Unknown item",
         nodeId: pathNodeIds[0] ?? "",
+        level: product?.level ?? null,
       };
     });
-  }, [activeRoute, nodeProductMap, pathNodeIds, products, selectedProducts]);
+  }, [activeRoute, nodeProductMap, pathNodeIds, productLevelMap, products, selectedProducts]);
 
   const routeSignature = useMemo(
     () => routeItems.map((item) => `${item.productId}-${item.nodeId}`).join("|"),

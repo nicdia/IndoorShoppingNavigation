@@ -2,6 +2,7 @@ type ItemEntry = {
   productId: number;
   productName: string;
   nodeId: string;
+  level?: number | null;
 };
 
 type ChecklistProps = {
@@ -10,6 +11,14 @@ type ChecklistProps = {
   completed: boolean[];
   onToggleComplete: (index: number) => void;
   onSetActive?: (index: number) => void;
+};
+
+const levelLabel = (level?: number | null) => {
+  if (level === 1) return "Top shelf";
+  if (level === 2) return "Middle shelf";
+  if (level === 3) return "Bottom shelf";
+  if (level === 99) return " ";
+  return "";
 };
 
 export function SelectedChecklist({ items, activeIndex, completed, onToggleComplete, onSetActive }: ChecklistProps) {
@@ -44,7 +53,7 @@ export function SelectedChecklist({ items, activeIndex, completed, onToggleCompl
                 />
                 <div>
                   <span className="item-name">{item.productName}</span>
-                  <span className="item-meta">Node {item.nodeId}</span>
+                  <span className="item-meta">{levelLabel(item.level)}</span>
                 </div>
               </label>
             </li>

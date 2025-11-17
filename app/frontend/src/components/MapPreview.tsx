@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { RouteNode, RouteSegment, StorePolygon } from "../mockData";
+import checkoutPinUrl from "../assets/icons/checkout-pin.svg";
 
 type MapPreviewProps = {
   path: RouteNode[];
@@ -183,8 +184,17 @@ export function MapPreview({
           )}
           {targetNode && (
             <g className="target-node" transform={`translate(${targetNode.screenX}, ${targetNode.screenY})`}>
-              <circle className="halo" r={8} />
-              <circle className="core" r={4} />
+              <g className="pin-wrapper" transform="rotate(-12)">
+                <image
+                  className="pin-image"
+                  href={checkoutPinUrl}
+                  width={32}
+                  height={48}
+                  x={-17}
+                  y={-38}
+                  preserveAspectRatio="xMidYMax meet"
+                />
+              </g>
             </g>
           )}
         </svg>
