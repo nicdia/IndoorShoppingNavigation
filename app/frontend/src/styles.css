@@ -27,11 +27,53 @@ a {
   display: flex;
   flex-direction: column;
   gap: 28px;
-  padding: 28px 36px 40px;
+  padding: 28px 36px 80px;
   max-width: 1280px;
   margin: 0 auto;
   flex: 1;
   width: 100%;
+  min-height: 100vh;
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.app-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.app-page-header h1 {
+  margin: 0;
+  font-size: clamp(1.8rem, 2.5vw, 2.4rem);
+}
+
+.app-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 4px 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.72rem;
+  color: #475569;
+  background: #dde4ee;
+  border-top: 1px solid rgba(148, 163, 184, 0.4);
+  z-index: 20;
+}
+
+.footer-authors {
+  text-align: right;
 }
 
 .section-header {
@@ -187,19 +229,20 @@ a {
 
 .route-segment {
   fill: none;
-  stroke-width: 7;
+  stroke-width: 5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 .route-segment.active {
   stroke: #ef4444;
-  opacity: 0.95;
+  opacity: 0.98;
+  filter: drop-shadow(0 2px 4px rgba(15, 23, 42, 0.35));
 }
 
 .route-segment.passive {
-  stroke: rgba(239, 68, 68, 0.35);
-  opacity: 0.5;
+  stroke: #e3b4c0;
+  opacity: 0.9;
 }
 
 .current-node .core {
@@ -214,12 +257,33 @@ a {
 }
 
 .current-node,
-.target-node {
+.target-node,
+.target-callout {
   pointer-events: none;
 }
 
 .target-node .pin-wrapper {
   transform-origin: 0 0;
+}
+
+.target-anchor {
+  fill: #ef4444;
+  stroke: none;
+}
+
+.target-callout-line {
+  fill: none;
+  stroke: #111111;
+  stroke-width: 1.4px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.target-callout-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  fill: #111827;
+  stroke: none;
 }
 
 .target-node .pin-image {
@@ -306,6 +370,23 @@ a {
   color: #364152;
   display: grid;
   gap: 8px;
+}
+
+.route-summary ol li {
+  transition: color 0.2s ease, font-weight 0.2s ease;
+}
+
+.route-summary ol li.active {
+  font-weight: 600;
+  color: #111827;
+}
+
+.route-summary ol li.done {
+  color: #9ba5b5;
+}
+
+.route-summary ol li.done.active {
+  color: #111827;
 }
 
 .primary-button {

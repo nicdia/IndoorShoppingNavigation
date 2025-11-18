@@ -426,6 +426,16 @@ function App() {
     return checkoutNodeId ?? entryNodeId ?? undefined;
   })();
 
+  const targetLabel = (() => {
+    if (routeItems.length === 0) {
+      return "Checkout";
+    }
+    if (activeIndex < routeItems.length) {
+      return routeItems[activeIndex]?.productName ?? "Produkt";
+    }
+    return "Checkout";
+  })();
+
   const previewPath: RouteNode[] = pathNodes.length > 0 ? pathNodes : [{ nodeId: "origin", x: 0, y: 0 }];
 
   // Build an ordered, edge-following path from the route's segments. Each segment may contain
@@ -475,31 +485,35 @@ function App() {
   }, [activeRoute.segments, coordinateLookup, pathNodes]);
 
   const effectiveActiveIndex = routeItems.length > 0 ? Math.min(activeIndex, routeItems.length - 1) : -1;
+  const completedStepsCount = useMemo(() => completed.filter(Boolean).length, [completed]);
 
   return (
     <div className="app-shell">
-      {view === "select" && (
-        <ProductList
-          products={products}
-          selectedIds={selectedProducts}
-          searchTerm={searchTerm}
-          onToggle={toggleProduct}
-          onSearchChange={setSearchTerm}
-          onConfirm={handleShowRoute}
-          canConfirm={selectedProducts.length > 0}
-          confirmLabel="Show route"
-          isLoading={isLoadingRoute || productsLoading}
-          errorMessage={combinedErrorMessage}
-        />
-      )}
+      <header className="app-page-header">
+        <h1>Grocery Store Navigation</h1>
+        {view === "route" && (
+          <button type="button" className="secondary-button" onClick={handleEditSelection}>
+            Edit selection
+          </button>
+        )}
+      </header>
+      <main className="app-main">
+        {view === "select" && (
+          <ProductList
+            products={products}
+            selectedIds={selectedProducts}
+            searchTerm={searchTerm}
+            onToggle={toggleProduct}
+            onSearchChange={setSearchTerm}
+            onConfirm={handleShowRoute}
+            canConfirm={selectedProducts.length > 0}
+            confirmLabel="Show route"
+            isLoading={isLoadingRoute || productsLoading}
+            errorMessage={combinedErrorMessage}
+          />
+        )}
 
-      {view === "route" && routeData && (
-        <>
-          <div className="route-header">
-            <button type="button" className="secondary-button" onClick={handleEditSelection}>
-              Edit selection
-            </button>
-          </div>
+        {view === "route" && routeData && (
           <div className="content-grid" style={contentGridStyle}>
             <MapPreview
               path={enrichedPath}
@@ -507,10 +521,16 @@ function App() {
               activeSegmentIndex={activeSegmentIndex}
               currentNodeId={currentNodeId}
               targetNodeId={targetNodeId}
+              targetLabel={targetLabel}
               polygons={layoutPolygons ?? undefined}
               onDimensionsChange={handleMapDimensionsChange}
             />
-            <RouteSummary totalDistance={activeRoute.total_cost ?? 0} directions={directions} />
+            <RouteSummary
+              totalDistance={activeRoute.total_cost ?? 0}
+              directions={directions}
+              activeIndex={activeSegmentIndex}
+              completedCount={completedStepsCount}
+            />
             <SelectedChecklist
               items={routeItems}
               activeIndex={effectiveActiveIndex}
@@ -519,12 +539,17 @@ function App() {
               onSetActive={handleSetActive}
             />
           </div>
-        </>
-      )}
+        )}
 
-      {view === "route" && !routeData && (
-        <p style={{ color: "#dc2626" }}>No route data available. Please return to the selection and try again.</p>
-      )}
+        {view === "route" && !routeData && (
+          <p style={{ color: "#dc2626" }}>No route data available. Please return to the selection and try again.</p>
+        )}
+      </main>
+
+      <footer className="app-footer">
+        <span className="footer-context">Location Based Services WiSe 25/26</span>
+        <span className="footer-authors">Nicolas Diaczyszyn | David Engler | Kes Lo | Niklas Menz</span>
+      </footer>
     </div>
   );
 }

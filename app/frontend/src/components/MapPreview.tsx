@@ -8,12 +8,17 @@ type MapPreviewProps = {
   activeSegmentIndex: number;
   currentNodeId?: string;
   targetNodeId?: string;
+  targetLabel?: string;
   polygons?: StorePolygon[];
   onDimensionsChange?: (dimensions: { width: number; height: number }) => void;
 };
 
 const CANVAS_LONG_SIDE = 520;
 const PADDING = 24;
+
+// Keep reference to the legacy checkout icon asset while it remains commented out for evaluation.
+const legacyCheckoutPinUrl = checkoutPinUrl;
+void legacyCheckoutPinUrl;
 
 type ProjectedNode = RouteNode & { screenX: number; screenY: number };
 type ProjectedPolygon = StorePolygon & { screenPoints: { x: number; y: number }[] };
@@ -80,6 +85,7 @@ export function MapPreview({
   activeSegmentIndex,
   currentNodeId,
   targetNodeId,
+  targetLabel,
   polygons,
   onDimensionsChange,
 }: MapPreviewProps) {
@@ -103,6 +109,51 @@ export function MapPreview({
   const lookup = new Map(projectedNodes.map((node) => [node.nodeId, node]));
   const currentNode = currentNodeId ? lookup.get(currentNodeId) : undefined;
   const targetNode = targetNodeId ? lookup.get(targetNodeId) : undefined;
+  const targetCallout = useMemo(() => {
+    if (!targetNode) {
+      return undefined;
+    }
+    const diagonalLength = 18;
+    const horizontalLength = 28;
+    const rightSpace = canvasWidth - targetNode.screenX;
+    const leftSpace = targetNode.screenX;
+    const direction: 1 | -1 = rightSpace >= leftSpace ? 1 : -1;
+    const angleDegrees = direction === 1 ? -45 : -135;
+    const angle = (angleDegrees * Math.PI) / 180;
+    const start = { x: targetNode.screenX, y: targetNode.screenY };
+    const kink = {
+      x: start.x + Math.cos(angle) * diagonalLength,
+      y: start.y + Math.sin(angle) * diagonalLength,
+    };
+    const end = {
+      x: kink.x + direction * horizontalLength,
+      y: kink.y,
+    };
+    const label = {
+      x: end.x + direction * 6,
+      y: end.y,
+    };
+    const textAnchor: "start" | "end" = direction === 1 ? "start" : "end";
+    return { start, kink, end, label, textAnchor };
+  }, [targetNode, canvasWidth]);
+  const segmentPaths = segments
+    .map((segment, index) => {
+      const points = segment.path
+        .map((nodeId) => lookup.get(nodeId))
+        .filter((node): node is ProjectedNode => Boolean(node));
+      if (points.length < 2) {
+        return null;
+      }
+      const pathData = points
+        .map((point, idx) => `${idx === 0 ? "M" : "L"}${point.screenX} ${point.screenY}`)
+        .join(" ");
+      return {
+        key: `${segment.from}-${segment.to}-${index}`,
+        pathData,
+        isActive: index === activeSegmentIndex,
+      };
+    })
+    .filter((entry): entry is { key: string; pathData: string; isActive: boolean } => Boolean(entry));
   const aspectRatio = canvasWidth / canvasHeight;
 
   const [viewport, setViewport] = useState(() => ({
@@ -156,25 +207,16 @@ export function MapPreview({
               className="map-polygon"
             />
           ))}
-          {segments.map((segment, index) => {
-            const points = segment.path
-              .map((nodeId) => lookup.get(nodeId))
-              .filter((node): node is ProjectedNode => Boolean(node));
-            if (points.length < 2) {
-              return null;
-            }
-            const pathData = points
-              .map((point, idx) => `${idx === 0 ? "M" : "L"}${point.screenX} ${point.screenY}`)
-              .join(" ");
-            const isActive = index === activeSegmentIndex;
-            return (
-              <path
-                key={`${segment.from}-${segment.to}`}
-                d={pathData}
-                className={isActive ? "route-segment active" : "route-segment passive"}
-              />
-            );
-          })}
+          {segmentPaths
+            .filter((segment) => !segment.isActive)
+            .map((segment) => (
+              <path key={segment.key} d={segment.pathData} className="route-segment passive" />
+            ))}
+          {segmentPaths
+            .filter((segment) => segment.isActive)
+            .map((segment) => (
+              <path key={`${segment.key}-active`} d={segment.pathData} className="route-segment active" />
+            ))}
           {/* Node-ID Overlay entfernt (nur für Debugging genutzt) */}
           {currentNode && (
             <g className="current-node" transform={`translate(${currentNode.screenX}, ${currentNode.screenY})`}>
@@ -182,6 +224,27 @@ export function MapPreview({
               <circle className="core" r={5.5} />
             </g>
           )}
+          {targetCallout && (
+            <g className="target-callout">
+              <circle className="target-anchor" cx={targetCallout.start.x} cy={targetCallout.start.y} r={4.5} />
+              <polyline
+                className="target-callout-line"
+                points={`${targetCallout.start.x},${targetCallout.start.y} ${targetCallout.kink.x},${targetCallout.kink.y} ${targetCallout.end.x},${targetCallout.end.y}`}
+              />
+              {targetLabel && (
+                <text
+                  className="target-callout-label"
+                  x={targetCallout.label.x}
+                  y={targetCallout.label.y}
+                  dominantBaseline="middle"
+                  textAnchor={targetCallout.textAnchor}
+                >
+                  {targetLabel}
+                </text>
+              )}
+            </g>
+          )}
+          {/*
           {targetNode && (
             <g className="target-node" transform={`translate(${targetNode.screenX}, ${targetNode.screenY})`}>
               <g className="pin-wrapper" transform="rotate(-12)">
@@ -197,6 +260,7 @@ export function MapPreview({
               </g>
             </g>
           )}
+          */}
         </svg>
       </div>
     </section>
