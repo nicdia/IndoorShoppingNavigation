@@ -30,9 +30,19 @@ export function ProductList({
     onSearchChange(event.target.value);
   };
 
-  const filtered = products.filter((product) => {
-    return product.name.toLowerCase().includes(searchTerm.toLowerCase());
-  });
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+
+  const filtered = products
+    .map((product) => ({
+      product,
+      normalizedName: product.name.trim(),
+    }))
+    .filter(({ normalizedName }) => normalizedName.toLowerCase().includes(normalizedSearch))
+    .sort((a, b) =>
+      a.normalizedName.localeCompare(b.normalizedName, undefined, {
+        sensitivity: "base",
+      })
+    );
 
   return (
     <section className="product-list">
@@ -51,7 +61,7 @@ export function ProductList({
         />
       </div>
       <ul className="product-list-items">
-        {filtered.map((product) => {
+        {filtered.map(({ product, normalizedName }) => {
           const checked = selectedIds.includes(product.id);
           return (
             <li key={product.id}>
@@ -61,7 +71,7 @@ export function ProductList({
                   checked={checked}
                   onChange={() => onToggle(product.id)}
                 />
-                <span>{product.name}</span>
+                <span>{normalizedName}</span>
               </label>
             </li>
           );

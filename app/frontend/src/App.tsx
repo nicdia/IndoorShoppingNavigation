@@ -16,6 +16,35 @@ import { NODE_COORDINATES } from "./data/nodeCoordinates";
 const DEFAULT_API_BASE = "http://127.0.0.1:8000";
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? DEFAULT_API_BASE;
 
+const NODE_LABEL_OVERRIDES: Record<string, string> = {
+  "21": "Entrance",
+  "14": "Checkout",
+  "15": "Checkout",
+};
+
+const getNodeLabelOverride = (nodeId: string | number | null | undefined) => {
+  if (nodeId === null || nodeId === undefined) {
+    return undefined;
+  }
+  const normalized = String(nodeId).trim();
+  if (!normalized) {
+    return undefined;
+  }
+  const numericCandidate = Number(normalized);
+  const candidateKeys = [normalized];
+  if (Number.isFinite(numericCandidate)) {
+    candidateKeys.push(String(numericCandidate));
+    candidateKeys.push(String(Math.trunc(numericCandidate)));
+  }
+  for (const key of candidateKeys) {
+    const override = NODE_LABEL_OVERRIDES[key];
+    if (override) {
+      return override;
+    }
+  }
+  return undefined;
+};
+
 function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [products, setProducts] = useState<Product[]>(mockProducts);
@@ -143,7 +172,7 @@ function App() {
       if (value === null || value === undefined) {
         return;
       }
-      const stringValue = String(value);
+      const stringValue = String(value).trim();
       if (!stringValue) {
         return;
       }
@@ -188,7 +217,7 @@ function App() {
     >();
     if (Array.isArray(activeRoute.products)) {
       for (const product of activeRoute.products) {
-        const nodeId = String(product.node_id ?? "");
+        const nodeId = String(product.node_id ?? "").trim();
         if (!nodeId) {
           continue;
         }
@@ -199,9 +228,10 @@ function App() {
           (typeof product.node_x === "number" && typeof product.node_y === "number"
             ? { x: product.node_x, y: product.node_y }
             : undefined);
+        const overrideLabel = getNodeLabelOverride(nodeId);
         list.push({
           productId: Number.isFinite(numericId) ? numericId : null,
-          productName: product.name ?? `Product ${nodeId}`,
+          productName: overrideLabel ?? product.name ?? `Product ${nodeId}`,
           position: productCoords,
         });
         map.set(nodeId, list);
@@ -224,7 +254,7 @@ function App() {
     const items: { productId: number; productName: string; nodeId: string; level?: number | null }[] = [];
     const orderedNodeIds =
       Array.isArray(activeRoute.order) && activeRoute.order.length > 0
-        ? activeRoute.order.map((nodeId) => String(nodeId))
+        ? activeRoute.order.map((nodeId) => String(nodeId).trim())
         : Array.from(nodeProductMap.keys());
 
     for (const nodeId of orderedNodeIds) {
@@ -236,9 +266,10 @@ function App() {
         const fallbackId = Number(nodeId);
         const numericId = product.productId ?? (Number.isFinite(fallbackId) ? fallbackId : items.length);
         const resolvedId = Number.isFinite(numericId) ? Number(numericId) : items.length;
+        const overrideLabel = getNodeLabelOverride(nodeId);
         items.push({
           productId: resolvedId,
-          productName: product.productName,
+          productName: overrideLabel ?? product.productName,
           nodeId,
           level: productLevelMap.get(resolvedId) ?? null,
         });
@@ -251,10 +282,12 @@ function App() {
 
     return selectedProducts.map((id) => {
       const product = products.find((entry) => entry.id === id);
+      const nodeId = pathNodeIds[0] ?? "";
+      const overrideLabel = getNodeLabelOverride(nodeId);
       return {
         productId: id,
-        productName: product?.name ?? "Unknown item",
-        nodeId: pathNodeIds[0] ?? "",
+        productName: overrideLabel ?? product?.name ?? "Unknown item",
+        nodeId,
         level: product?.level ?? null,
       };
     });
@@ -287,11 +320,16 @@ function App() {
       return [];
     }
     const labelFor = (nodeId: string) => {
-      const productsAtNode = nodeProductMap.get(nodeId);
+      const overrideLabel = getNodeLabelOverride(nodeId);
+      if (overrideLabel) {
+        return overrideLabel;
+      }
+      const normalizedNodeId = String(nodeId ?? "").trim();
+      const productsAtNode = nodeProductMap.get(normalizedNodeId);
       if (productsAtNode && productsAtNode.length > 0) {
         return productsAtNode[0].productName;
       }
-      return nodeId;
+      return normalizedNodeId || String(nodeId ?? "");
     };
     return activeRoute.segments.map((segment) => {
       const distance = typeof segment.cost === "number" ? segment.cost : 0;
@@ -320,7 +358,14 @@ function App() {
   const handleToggleComplete = useCallback((index: number) => {
     setCompleted((prev) => {
       const next = [...prev];
-      next[index] = !next[index];
+      const firstIncomplete = next.findIndex((value) => !value);
+      if (firstIncomplete === -1) {
+        return prev;
+      }
+      if (index !== firstIncomplete) {
+        return prev;
+      }
+      next[index] = true;
       return next;
     });
   }, []);

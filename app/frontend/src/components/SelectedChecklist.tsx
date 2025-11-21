@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 type ItemEntry = {
   productId: number;
   productName: string;
@@ -22,6 +24,23 @@ const levelLabel = (level?: number | null) => {
 };
 
 export function SelectedChecklist({ items, activeIndex, completed, onToggleComplete, onSetActive }: ChecklistProps) {
+  const firstIncomplete = completed.findIndex((value) => !value);
+  const itemRefs = useRef<(HTMLLIElement | null)[]>([]);
+
+  useEffect(() => {
+    itemRefs.current = itemRefs.current.slice(0, items.length);
+  }, [items.length]);
+
+  useEffect(() => {
+    if (activeIndex < 0) {
+      return;
+    }
+    const target = itemRefs.current[activeIndex];
+    if (target) {
+      target.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [activeIndex]);
+
   return (
     <section className="checklist">
       <header className="section-header">
@@ -34,14 +53,18 @@ export function SelectedChecklist({ items, activeIndex, completed, onToggleCompl
         {items.map((item, index) => {
           const active = index === activeIndex;
           const done = completed[index];
+          const isSelectable = !done && firstIncomplete === index;
           return (
             <li
+              ref={(node) => {
+                itemRefs.current[index] = node;
+              }}
               key={item.productId}
               className={`checklist-item${active ? " active" : ""}${done ? " done" : ""}`}
             >
               <label
                 onClick={() => {
-                  if (onSetActive) {
+                  if (onSetActive && index === firstIncomplete) {
                     onSetActive(index);
                   }
                 }}
@@ -50,6 +73,7 @@ export function SelectedChecklist({ items, activeIndex, completed, onToggleCompl
                   type="checkbox"
                   checked={done}
                   onChange={() => onToggleComplete(index)}
+                  disabled={!isSelectable}
                 />
                 <div>
                   <span className="item-name">{item.productName}</span>
