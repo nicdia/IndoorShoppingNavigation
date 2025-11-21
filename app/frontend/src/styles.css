@@ -12,6 +12,7 @@ body {
 body {
   margin: 0;
   min-height: 100vh;
+  height: 100vh;
 }
 
 a {
@@ -20,6 +21,7 @@ a {
 
 #root {
   min-height: 100vh;
+  height: 100vh;
   display: flex;
 }
 
@@ -27,19 +29,31 @@ a {
   display: flex;
   flex-direction: column;
   gap: 28px;
-  padding: 28px 36px 80px;
+  padding: 28px 36px 64px;
   max-width: 1280px;
   margin: 0 auto;
   flex: 1;
   width: 100%;
-  min-height: 100vh;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 .app-main {
-  flex: 1;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: 28px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-main > * {
+  min-height: 0;
+}
+
+.app-main > .product-list {
+  flex: 1 1 auto;
 }
 
 .app-page-header {
@@ -99,14 +113,20 @@ a {
   border-radius: 20px;
   padding: 24px;
   box-shadow: 0 10px 50px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .section-footer {
-  margin-top: 24px;
+  margin-top: auto;
+  padding-top: 18px;
   display: flex;
   justify-content: flex-end;
   align-items: center;
   gap: 16px;
+  border-top: 1px solid #e2e8f0;
 }
 
 .form-error {
@@ -132,7 +152,8 @@ a {
   padding: 0;
   display: grid;
   gap: 8px;
-  max-height: 480px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
 }
 
