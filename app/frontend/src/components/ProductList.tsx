@@ -1,5 +1,7 @@
 import { ChangeEvent } from "react";
-import { Product } from "../mockData";
+import { Product } from "../types/route";
+
+// Displays the selectable product catalog with search support.
 
 type ProductListProps = {
   products: Product[];
@@ -27,6 +29,7 @@ export function ProductList({
   errorMessage = null
 }: ProductListProps) {
   const handleSearch = (event: ChangeEvent<HTMLInputElement>) => {
+    // Keep the search box controlled by lifting the value.
     onSearchChange(event.target.value);
   };
 
@@ -37,6 +40,7 @@ export function ProductList({
       product,
       normalizedName: product.name.trim(),
     }))
+    // Filter and sort dynamically so the list never needs manual refresh.
     .filter(({ normalizedName }) => normalizedName.toLowerCase().includes(normalizedSearch))
     .sort((a, b) =>
       a.normalizedName.localeCompare(b.normalizedName, undefined, {

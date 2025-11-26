@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { RouteNode, RouteSegment, StorePolygon } from "../mockData";
+import { RouteNode, RouteSegment, StorePolygon } from "../types/route";
 import checkoutPinUrl from "../assets/icons/checkout-pin.svg";
+
+// Draws the store layout along with the shopper path and markers.
 
 type MapPreviewProps = {
   path: RouteNode[];
@@ -32,6 +34,7 @@ type Bounds = {
 };
 
 function collectBounds(nodes: RouteNode[], polygons?: StorePolygon[]): Bounds {
+  // Compute the visible canvas window so the geometry fits the viewport.
   const xs = [...nodes.map((node) => node.x)];
   const ys = [...nodes.map((node) => node.y)];
   if (polygons) {
@@ -56,6 +59,7 @@ function collectBounds(nodes: RouteNode[], polygons?: StorePolygon[]): Bounds {
 }
 
 function projectGeometry(nodes: RouteNode[], polygons?: StorePolygon[]) {
+  // Project map coordinates into canvas space while keeping proportions.
   const bounds = collectBounds(nodes, polygons);
   const projectPoint = (x: number, y: number) => ({
     x: (x - bounds.minX) * bounds.scale + PADDING,
@@ -90,6 +94,7 @@ export function MapPreview({
   onDimensionsChange,
 }: MapPreviewProps) {
   const augmentedPath = useMemo(() => {
+    // Include every segment waypoint so the map stays continuous.
     const map = new Map<string, RouteNode>();
     for (const node of path) {
       map.set(node.nodeId, node);
@@ -110,6 +115,7 @@ export function MapPreview({
   const currentNode = currentNodeId ? lookup.get(currentNodeId) : undefined;
   const targetNode = targetNodeId ? lookup.get(targetNodeId) : undefined;
   const targetCallout = useMemo(() => {
+    // Position the target label so it avoids overlapping the marker.
     if (!targetNode) {
       return undefined;
     }
@@ -162,6 +168,7 @@ export function MapPreview({
   }));
 
   useEffect(() => {
+    // Track viewport updates so the canvas can respond to resizing.
     const update = () => {
       setViewport({ width: window.innerWidth, height: window.innerHeight });
     };
@@ -183,6 +190,7 @@ export function MapPreview({
     : { width: `${displayWidth}px`, height: `${displayHeight}px` };
 
   useEffect(() => {
+    // Share the final render size with the parent layout.
     onDimensionsChange?.({ width: displayWidth, height: displayHeight });
   }, [displayWidth, displayHeight, onDimensionsChange]);
 
@@ -217,7 +225,7 @@ export function MapPreview({
             .map((segment) => (
               <path key={`${segment.key}-active`} d={segment.pathData} className="route-segment active" />
             ))}
-          {/* Node-ID Overlay entfernt (nur für Debugging genutzt) */}
+          {/* Node ID overlay removed because it was only used for debugging */}
           {currentNode && (
             <g className="current-node" transform={`translate(${currentNode.screenX}, ${currentNode.screenY})`}>
               <circle className="pulse" r={12} />

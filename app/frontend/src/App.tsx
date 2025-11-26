@@ -3,15 +3,10 @@ import { ProductList } from "./components/ProductList";
 import { MapPreview } from "./components/MapPreview";
 import { SelectedChecklist } from "./components/SelectedChecklist";
 import { RouteSummary } from "./components/RouteSummary";
-import {
-  Product,
-  RouteData,
-  RouteNode,
-  StorePolygon,
-  mockProducts,
-  mockRoute,
-} from "./mockData";
+import { Product, RouteData, RouteNode, StorePolygon } from "./types/route";
 import { NODE_COORDINATES } from "./data/nodeCoordinates";
+
+// Central application component driving product selection and route execution.
 
 const DEFAULT_API_BASE = "http://127.0.0.1:8000";
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? DEFAULT_API_BASE;
@@ -47,7 +42,7 @@ const getNodeLabelOverride = (nodeId: string | number | null | undefined) => {
 
 function App() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [products, setProducts] = useState<Product[]>(mockProducts);
+  const [products, setProducts] = useState<Product[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsError, setProductsError] = useState<string | null>(null);
 
@@ -63,6 +58,7 @@ function App() {
   const [mapPanelSize, setMapPanelSize] = useState<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
+    // Fetch products from the backend on first render.
     setProductsLoading(true);
     fetch(`${API_BASE_URL}/products`)
       .then(async (response) => {
@@ -93,20 +89,20 @@ function App() {
             setProductsError(null);
             setProducts(parsed);
           } else {
-            setProductsError("Product list from API was empty. Showing fallback data.");
-            setProducts(mockProducts);
+            setProductsError("Product list from API was empty.");
+            setProducts([]);
           }
         }
       })
       .catch((error) => {
-        console.warn("Falling back to mock products", error);
         setProductsError(error instanceof Error ? error.message : "Could not load products from API.");
-        setProducts(mockProducts);
+        setProducts([]);
       })
       .finally(() => setProductsLoading(false));
   }, []);
 
   useEffect(() => {
+    // Load static layout polygons once for the map overlay.
     fetch("/layout.json")
       .then((response) => {
         if (!response.ok) {
@@ -129,25 +125,26 @@ function App() {
       });
   }, []);
 
-  const activeRoute: RouteData = routeData ?? mockRoute;
   const combinedErrorMessage = useMemo(() => {
+    // Merge product and route errors so the UI can show a single message.
     const messages = [productsError, routeError].filter((value): value is string => Boolean(value));
     return messages.length > 0 ? messages.join(". ") : null;
   }, [productsError, routeError]);
 
   const coordinateLookup = useMemo(() => {
+    // Build a lookup table for node coordinates with service data taking priority.
     const map = new Map<string, { x: number; y: number }>();
 
-    if (activeRoute?.node_coordinates) {
-      Object.entries(activeRoute.node_coordinates).forEach(([nodeId, coords]) => {
+    if (routeData?.node_coordinates) {
+      Object.entries(routeData.node_coordinates).forEach(([nodeId, coords]) => {
         if (coords && typeof coords.x === "number" && typeof coords.y === "number") {
           map.set(String(nodeId), { x: coords.x, y: coords.y });
         }
       });
     }
 
-    if (Array.isArray(activeRoute?.waypoint_coordinates)) {
-      activeRoute.waypoint_coordinates.forEach((waypoint) => {
+    if (Array.isArray(routeData?.waypoint_coordinates)) {
+      routeData.waypoint_coordinates.forEach((waypoint) => {
         if (waypoint && typeof waypoint.node_id === "string") {
           const { node_id, x, y } = waypoint;
           if (typeof x === "number" && typeof y === "number") {
@@ -164,9 +161,10 @@ function App() {
     }
 
     return map;
-  }, [activeRoute]);
+  }, [routeData]);
 
   const pathNodeIds = useMemo(() => {
+    // Derive an ordered list of node ids that make up the full path.
     const unique: string[] = [];
     const appendUnique = (value: string | number | null | undefined) => {
       if (value === null || value === undefined) {
@@ -181,22 +179,26 @@ function App() {
       }
     };
 
-    if (Array.isArray(activeRoute.way_nodes) && activeRoute.way_nodes.length > 0) {
-      activeRoute.way_nodes.forEach((nodeId) => appendUnique(nodeId));
-    } else if (Array.isArray(activeRoute.segments)) {
-      for (const segment of activeRoute.segments) {
-        segment.path.forEach((nodeId) => appendUnique(nodeId));
+    const wayNodes = routeData?.way_nodes ?? [];
+    if (wayNodes.length > 0) {
+      wayNodes.forEach((nodeId) => appendUnique(nodeId));
+    } else if (Array.isArray(routeData?.segments)) {
+      for (const segment of routeData.segments) {
+        if (Array.isArray(segment.path)) {
+          segment.path.forEach((nodeId) => appendUnique(nodeId));
+        }
       }
     }
 
-    if (unique.length === 0 && Array.isArray(activeRoute.order)) {
-      activeRoute.order.forEach((nodeId) => appendUnique(nodeId));
+    if (unique.length === 0 && Array.isArray(routeData?.order)) {
+      routeData.order.forEach((nodeId) => appendUnique(nodeId));
     }
 
     return unique;
-  }, [activeRoute]);
+  }, [routeData]);
 
   const pathNodes = useMemo<RouteNode[]>(() => {
+    // Resolve node ids to coordinates for drawing the overview path.
     if (pathNodeIds.length === 0) {
       return [];
     }
@@ -211,12 +213,13 @@ function App() {
   }, [coordinateLookup, pathNodeIds]);
 
   const nodeProductMap = useMemo(() => {
+    // Group products by node so we can label map markers and list entries.
     const map = new Map<
       string,
       { productId: number | null; productName: string; position?: { x: number; y: number } }[]
     >();
-    if (Array.isArray(activeRoute.products)) {
-      for (const product of activeRoute.products) {
+    if (Array.isArray(routeData?.products)) {
+      for (const product of routeData.products) {
         const nodeId = String(product.node_id ?? "").trim();
         if (!nodeId) {
           continue;
@@ -238,9 +241,10 @@ function App() {
       }
     }
     return map;
-  }, [activeRoute, coordinateLookup]);
+  }, [routeData, coordinateLookup]);
 
   const productLevelMap = useMemo(() => {
+    // Cache product shelf levels for quick lookup when rendering the checklist.
     const map = new Map<number, number | null>();
     for (const product of products) {
       if (typeof product.id === "number") {
@@ -251,10 +255,11 @@ function App() {
   }, [products]);
 
   const routeItems = useMemo(() => {
+    // Flatten the ordered node list into checklist entries with readable labels.
     const items: { productId: number; productName: string; nodeId: string; level?: number | null }[] = [];
     const orderedNodeIds =
-      Array.isArray(activeRoute.order) && activeRoute.order.length > 0
-        ? activeRoute.order.map((nodeId) => String(nodeId).trim())
+      Array.isArray(routeData?.order) && routeData.order.length > 0
+        ? routeData.order.map((nodeId) => String(nodeId).trim())
         : Array.from(nodeProductMap.keys());
 
     for (const nodeId of orderedNodeIds) {
@@ -291,32 +296,37 @@ function App() {
         level: product?.level ?? null,
       };
     });
-  }, [activeRoute, nodeProductMap, pathNodeIds, productLevelMap, products, selectedProducts]);
+  }, [routeData, nodeProductMap, pathNodeIds, productLevelMap, products, selectedProducts]);
 
   const routeSignature = useMemo(
+    // Signature is used to reset local state when the route changes.
     () => routeItems.map((item) => `${item.productId}-${item.nodeId}`).join("|"),
     [routeItems]
   );
 
   useEffect(() => {
+    // Reset focus to the first item when the user opens the route view.
     if (view === "route") {
       setActiveIndex(0);
     }
   }, [view, routeSignature]);
 
   useEffect(() => {
+    // Clear completion state whenever a new route arrives.
     setCompleted(new Array(routeItems.length).fill(false));
     setActiveIndex(0);
   }, [routeItems.length, routeSignature, view]);
 
   useEffect(() => {
+    // Reset map panel size when leaving the route view.
     if (view !== "route") {
       setMapPanelSize(null);
     }
   }, [view]);
 
   const directions = useMemo(() => {
-    if (!Array.isArray(activeRoute.segments)) {
+    // Convert raw path segments into plain language steps for the summary panel.
+    if (!Array.isArray(routeData?.segments)) {
       return [];
     }
     const labelFor = (nodeId: string) => {
@@ -331,15 +341,16 @@ function App() {
       }
       return normalizedNodeId || String(nodeId ?? "");
     };
-    return activeRoute.segments.map((segment) => {
+    return routeData.segments.map((segment) => {
       const distance = typeof segment.cost === "number" ? segment.cost : 0;
       const originLabel = labelFor(segment.from);
       const destinationLabel = labelFor(segment.to);
       return `Walk ${distance.toFixed(1)} meters from ${originLabel} to ${destinationLabel}.`;
     });
-  }, [activeRoute, nodeProductMap]);
+  }, [routeData, nodeProductMap]);
 
   const contentGridStyle = useMemo<CSSProperties | undefined>(() => {
+    // Tie the map height to the measured canvas size for consistent layout.
     if (!mapPanelSize) {
       return undefined;
     }
@@ -347,6 +358,7 @@ function App() {
   }, [mapPanelSize]);
 
   const toggleProduct = (id: number) => {
+    // Allow users to add or remove products from their shopping list.
     setSelectedProducts((previous) => {
       if (previous.includes(id)) {
         return previous.filter((entry) => entry !== id);
@@ -356,6 +368,7 @@ function App() {
   };
 
   const handleToggleComplete = useCallback((index: number) => {
+    // Guard completion so only the first incomplete item can be checked.
     setCompleted((prev) => {
       const next = [...prev];
       const firstIncomplete = next.findIndex((value) => !value);
@@ -371,6 +384,7 @@ function App() {
   }, []);
 
   useEffect(() => {
+    // Advance the active index to the next incomplete item.
     const firstIncomplete = completed.findIndex((value) => !value);
     if (firstIncomplete === -1) {
       setActiveIndex(routeItems.length);
@@ -380,10 +394,12 @@ function App() {
   }, [completed, routeItems.length]);
 
   const handleSetActive = (index: number) => {
+    // Allow keyboard focus to follow programmatic scroll in the checklist.
     setActiveIndex(index);
   };
 
   const handleMapDimensionsChange = useCallback((size: { width: number; height: number }) => {
+    // Cache canvas dimensions so the layout grid can adjust once rendering finishes.
     setMapPanelSize((previous) => {
       if (previous && previous.width === size.width && previous.height === size.height) {
         return previous;
@@ -393,6 +409,7 @@ function App() {
   }, []);
 
   const handleShowRoute = async () => {
+    // Request a new route from the backend for the selected products.
     if (selectedProducts.length === 0 || isLoadingRoute) {
       return;
     }
@@ -429,10 +446,11 @@ function App() {
   };
 
   const handleEditSelection = () => {
+    // Return to the selection view so the user can adjust the basket.
     setView("select");
   };
 
-  const activeSegments = Array.isArray(activeRoute.segments) ? activeRoute.segments : [];
+  const activeSegments = Array.isArray(routeData?.segments) ? routeData.segments : [];
   const unclampedSegmentIndex =
     routeItems.length === 0
       ? activeSegments.length - 1
@@ -487,7 +505,8 @@ function App() {
   // `path_coordinates` (preferred) or a `path` (node ids) which we resolve via coordinateLookup.
   const enrichedPath = useMemo<RouteNode[]>(() => {
     const out: RouteNode[] = [];
-    if (!Array.isArray(activeRoute.segments) || activeRoute.segments.length === 0) {
+    const segments = Array.isArray(routeData?.segments) ? routeData.segments : [];
+    if (segments.length === 0) {
       return pathNodes.length > 0 ? pathNodes : out;
     }
 
@@ -498,7 +517,7 @@ function App() {
       }
     };
 
-    for (const seg of activeRoute.segments) {
+    for (const seg of segments) {
       // prefer coordinates directly provided on the segment
       if (Array.isArray((seg as any).path_coordinates) && (seg as any).path_coordinates.length > 0) {
         for (const coord of (seg as any).path_coordinates) {
@@ -527,7 +546,7 @@ function App() {
     // If we ended up empty (no segments with coords), fallback to pathNodes
     if (out.length === 0 && pathNodes.length > 0) return pathNodes;
     return out;
-  }, [activeRoute.segments, coordinateLookup, pathNodes]);
+  }, [routeData, coordinateLookup, pathNodes]);
 
   const effectiveActiveIndex = routeItems.length > 0 ? Math.min(activeIndex, routeItems.length - 1) : -1;
   const completedStepsCount = useMemo(() => completed.filter(Boolean).length, [completed]);
@@ -571,7 +590,7 @@ function App() {
               onDimensionsChange={handleMapDimensionsChange}
             />
             <RouteSummary
-              totalDistance={activeRoute.total_cost ?? 0}
+              totalDistance={routeData?.total_cost ?? 0}
               directions={directions}
               activeIndex={activeSegmentIndex}
               completedCount={completedStepsCount}

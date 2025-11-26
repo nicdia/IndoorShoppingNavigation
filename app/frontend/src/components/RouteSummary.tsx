@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 
+// Shows the plain language instructions for the active route.
+
 type RouteSummaryProps = {
   totalDistance: number;
   directions: string[];
@@ -11,6 +13,7 @@ export function RouteSummary({ totalDistance, directions, activeIndex, completed
   const itemRefs = useRef<(HTMLLIElement | null)[]>([]);
 
   useEffect(() => {
+    // Prevent stale nodes when the instruction list length changes.
     itemRefs.current = itemRefs.current.slice(0, directions.length);
   }, [directions.length]);
 
@@ -18,6 +21,7 @@ export function RouteSummary({ totalDistance, directions, activeIndex, completed
     if (typeof activeIndex !== "number" || activeIndex < 0) {
       return;
     }
+    // Follow the active instruction as the shopper proceeds.
     const target = itemRefs.current[activeIndex];
     if (target) {
       target.scrollIntoView({ block: "nearest", behavior: "smooth" });

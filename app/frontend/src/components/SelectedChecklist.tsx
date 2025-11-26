@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 
+// Renders the ordered checklist and keeps the current step in view.
+
 type ItemEntry = {
   productId: number;
   productName: string;
@@ -28,6 +30,7 @@ export function SelectedChecklist({ items, activeIndex, completed, onToggleCompl
   const itemRefs = useRef<(HTMLLIElement | null)[]>([]);
 
   useEffect(() => {
+    // Trim ref storage when the route length changes.
     itemRefs.current = itemRefs.current.slice(0, items.length);
   }, [items.length]);
 
@@ -35,6 +38,7 @@ export function SelectedChecklist({ items, activeIndex, completed, onToggleCompl
     if (activeIndex < 0) {
       return;
     }
+    // Scroll the active entry into view for long shopping lists.
     const target = itemRefs.current[activeIndex];
     if (target) {
       target.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -64,6 +68,7 @@ export function SelectedChecklist({ items, activeIndex, completed, onToggleCompl
             >
               <label
                 onClick={() => {
+                  // Only allow focusing the step that is ready to be handled.
                   if (onSetActive && index === firstIncomplete) {
                     onSetActive(index);
                   }
