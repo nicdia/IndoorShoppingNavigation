@@ -16,7 +16,7 @@ def load_graph(path: str) -> nx.Graph:
 
 if __name__ == "__main__":
     # --- Standard-Testsetting für alle Algorithmen ---
-    GRAPH_PATH = "../resources/graph.graphml"
+    GRAPH_PATH = "resources/graph.graphml"
 
     ENTRY = "21"
     CHECKOUTS = ["14", "15"]
