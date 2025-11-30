@@ -3,6 +3,7 @@ import networkx as nx
 
 from criteria.metrics_wrapper import evaluate_all_criteria
 from algorithms.bnb_algorithm import run_algorithm
+#from algorithms.bnb_a_star import run_algorithm
 
 def load_graph(path: str) -> nx.Graph:
     """
