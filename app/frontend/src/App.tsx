@@ -5,6 +5,7 @@ import { SelectedChecklist } from "./components/SelectedChecklist";
 import { RouteSummary } from "./components/RouteSummary";
 import { Product, RouteData, RouteNode, StorePolygon } from "./types/route";
 import { NODE_COORDINATES } from "./data/nodeCoordinates";
+import { buildNavigationInstructions } from "./utils/navigationText";
 
 // Central application component driving product selection and route execution.
 
@@ -227,10 +228,10 @@ function App() {
         const list = map.get(nodeId) ?? [];
         const numericId = Number(product.product_id);
         const productCoords =
-          coordinateLookup.get(nodeId) ??
           (typeof product.node_x === "number" && typeof product.node_y === "number"
             ? { x: product.node_x, y: product.node_y }
-            : undefined);
+            : undefined) ??
+          coordinateLookup.get(nodeId);
         const overrideLabel = getNodeLabelOverride(nodeId);
         list.push({
           productId: Number.isFinite(numericId) ? numericId : null,
@@ -284,6 +285,7 @@ function App() {
     if (items.length > 0) {
       return items;
     }
+    
 
     return selectedProducts.map((id) => {
       const product = products.find((entry) => entry.id === id);
@@ -325,29 +327,16 @@ function App() {
   }, [view]);
 
   const directions = useMemo(() => {
-    // Convert raw path segments into plain language steps for the summary panel.
-    if (!Array.isArray(routeData?.segments)) {
+    if (pathNodes.length === 0) {
       return [];
     }
-    const labelFor = (nodeId: string) => {
-      const overrideLabel = getNodeLabelOverride(nodeId);
-      if (overrideLabel) {
-        return overrideLabel;
-      }
-      const normalizedNodeId = String(nodeId ?? "").trim();
-      const productsAtNode = nodeProductMap.get(normalizedNodeId);
-      if (productsAtNode && productsAtNode.length > 0) {
-        return productsAtNode[0].productName;
-      }
-      return normalizedNodeId || String(nodeId ?? "");
-    };
-    return routeData.segments.map((segment) => {
-      const distance = typeof segment.cost === "number" ? segment.cost : 0;
-      const originLabel = labelFor(segment.from);
-      const destinationLabel = labelFor(segment.to);
-      return `Walk ${distance.toFixed(1)} meters from ${originLabel} to ${destinationLabel}.`;
+    return buildNavigationInstructions({
+      path: pathNodes,
+      routeItems,
+      nodeProductMap,
+      resolveNodeName: (nodeId) => getNodeLabelOverride(nodeId) ?? nodeId,
     });
-  }, [routeData, nodeProductMap]);
+  }, [pathNodes, routeItems, nodeProductMap]);
 
   const contentGridStyle = useMemo<CSSProperties | undefined>(() => {
     // Tie the map height to the measured canvas size for consistent layout.
