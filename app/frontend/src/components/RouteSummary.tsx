@@ -33,7 +33,6 @@ export function RouteSummary({ totalDistance, directions, activeIndex, completed
       <header className="section-header">
         <div>
           <h2>Route Description</h2>
-          <p>Plain language instructions to support the visual map.</p>
         </div>
       </header>
       <p className="distance">Total distance: {totalDistance.toFixed(1)} m</p>

@@ -50,7 +50,6 @@ export function SelectedChecklist({ items, activeIndex, completed, onToggleCompl
       <header className="section-header">
         <div>
           <h2>Optimized Route</h2>
-          <p>Follow the ordered list to walk the shortest path.</p>
         </div>
       </header>
       <ol>

@@ -185,7 +185,7 @@ function buildProductNarration({
   const shelf = describeShelf(level);
 
   productUsage.set(nodeId, usage + 1);
-  const shelfPreposition = shelf === "shelf" ? "on the" : "in the";
+  const shelfPreposition = "in the";
   return `${productName} is ${describeSide(side)} ${shelfPreposition} ${shelf}.`;
 }
 
