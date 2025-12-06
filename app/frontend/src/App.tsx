@@ -3,22 +3,47 @@ import { ProductList } from "./components/ProductList";
 import { MapPreview } from "./components/MapPreview";
 import { SelectedChecklist } from "./components/SelectedChecklist";
 import { RouteSummary } from "./components/RouteSummary";
-import {
-  Product,
-  RouteData,
-  RouteNode,
-  StorePolygon,
-  mockProducts,
-  mockRoute,
-} from "./mockData";
+import { Product, RouteData, RouteNode, StorePolygon } from "./types/route";
 import { NODE_COORDINATES } from "./data/nodeCoordinates";
+import { buildNavigationInstructions } from "./utils/navigationText";
+
+// Central application component driving product selection and route execution.
 
 const DEFAULT_API_BASE = "http://127.0.0.1:8000";
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? DEFAULT_API_BASE;
 
+const NODE_LABEL_OVERRIDES: Record<string, string> = {
+  "21": "Entrance",
+  "14": "Checkout",
+  "15": "Checkout",
+};
+
+const getNodeLabelOverride = (nodeId: string | number | null | undefined) => {
+  if (nodeId === null || nodeId === undefined) {
+    return undefined;
+  }
+  const normalized = String(nodeId).trim();
+  if (!normalized) {
+    return undefined;
+  }
+  const numericCandidate = Number(normalized);
+  const candidateKeys = [normalized];
+  if (Number.isFinite(numericCandidate)) {
+    candidateKeys.push(String(numericCandidate));
+    candidateKeys.push(String(Math.trunc(numericCandidate)));
+  }
+  for (const key of candidateKeys) {
+    const override = NODE_LABEL_OVERRIDES[key];
+    if (override) {
+      return override;
+    }
+  }
+  return undefined;
+};
+
 function App() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [products, setProducts] = useState<Product[]>(mockProducts);
+  const [products, setProducts] = useState<Product[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsError, setProductsError] = useState<string | null>(null);
 
@@ -34,6 +59,7 @@ function App() {
   const [mapPanelSize, setMapPanelSize] = useState<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
+    // Fetch products from the backend on first render.
     setProductsLoading(true);
     fetch(`${API_BASE_URL}/products`)
       .then(async (response) => {
@@ -64,20 +90,20 @@ function App() {
             setProductsError(null);
             setProducts(parsed);
           } else {
-            setProductsError("Product list from API was empty. Showing fallback data.");
-            setProducts(mockProducts);
+            setProductsError("Product list from API was empty.");
+            setProducts([]);
           }
         }
       })
       .catch((error) => {
-        console.warn("Falling back to mock products", error);
         setProductsError(error instanceof Error ? error.message : "Could not load products from API.");
-        setProducts(mockProducts);
+        setProducts([]);
       })
       .finally(() => setProductsLoading(false));
   }, []);
 
   useEffect(() => {
+    // Load static layout polygons once for the map overlay.
     fetch("/layout.json")
       .then((response) => {
         if (!response.ok) {
@@ -100,25 +126,26 @@ function App() {
       });
   }, []);
 
-  const activeRoute: RouteData = routeData ?? mockRoute;
   const combinedErrorMessage = useMemo(() => {
+    // Merge product and route errors so the UI can show a single message.
     const messages = [productsError, routeError].filter((value): value is string => Boolean(value));
     return messages.length > 0 ? messages.join(". ") : null;
   }, [productsError, routeError]);
 
   const coordinateLookup = useMemo(() => {
+    // Build a lookup table for node coordinates with service data taking priority.
     const map = new Map<string, { x: number; y: number }>();
 
-    if (activeRoute?.node_coordinates) {
-      Object.entries(activeRoute.node_coordinates).forEach(([nodeId, coords]) => {
+    if (routeData?.node_coordinates) {
+      Object.entries(routeData.node_coordinates).forEach(([nodeId, coords]) => {
         if (coords && typeof coords.x === "number" && typeof coords.y === "number") {
           map.set(String(nodeId), { x: coords.x, y: coords.y });
         }
       });
     }
 
-    if (Array.isArray(activeRoute?.waypoint_coordinates)) {
-      activeRoute.waypoint_coordinates.forEach((waypoint) => {
+    if (Array.isArray(routeData?.waypoint_coordinates)) {
+      routeData.waypoint_coordinates.forEach((waypoint) => {
         if (waypoint && typeof waypoint.node_id === "string") {
           const { node_id, x, y } = waypoint;
           if (typeof x === "number" && typeof y === "number") {
@@ -135,15 +162,16 @@ function App() {
     }
 
     return map;
-  }, [activeRoute]);
+  }, [routeData]);
 
   const pathNodeIds = useMemo(() => {
+    // Derive an ordered list of node ids that make up the full path.
     const unique: string[] = [];
     const appendUnique = (value: string | number | null | undefined) => {
       if (value === null || value === undefined) {
         return;
       }
-      const stringValue = String(value);
+      const stringValue = String(value).trim();
       if (!stringValue) {
         return;
       }
@@ -152,22 +180,26 @@ function App() {
       }
     };
 
-    if (Array.isArray(activeRoute.way_nodes) && activeRoute.way_nodes.length > 0) {
-      activeRoute.way_nodes.forEach((nodeId) => appendUnique(nodeId));
-    } else if (Array.isArray(activeRoute.segments)) {
-      for (const segment of activeRoute.segments) {
-        segment.path.forEach((nodeId) => appendUnique(nodeId));
+    const wayNodes = routeData?.way_nodes ?? [];
+    if (wayNodes.length > 0) {
+      wayNodes.forEach((nodeId) => appendUnique(nodeId));
+    } else if (Array.isArray(routeData?.segments)) {
+      for (const segment of routeData.segments) {
+        if (Array.isArray(segment.path)) {
+          segment.path.forEach((nodeId) => appendUnique(nodeId));
+        }
       }
     }
 
-    if (unique.length === 0 && Array.isArray(activeRoute.order)) {
-      activeRoute.order.forEach((nodeId) => appendUnique(nodeId));
+    if (unique.length === 0 && Array.isArray(routeData?.order)) {
+      routeData.order.forEach((nodeId) => appendUnique(nodeId));
     }
 
     return unique;
-  }, [activeRoute]);
+  }, [routeData]);
 
   const pathNodes = useMemo<RouteNode[]>(() => {
+    // Resolve node ids to coordinates for drawing the overview path.
     if (pathNodeIds.length === 0) {
       return [];
     }
@@ -182,39 +214,53 @@ function App() {
   }, [coordinateLookup, pathNodeIds]);
 
   const nodeProductMap = useMemo(() => {
+    // Group products by node so we can label map markers and list entries.
     const map = new Map<
       string,
       { productId: number | null; productName: string; position?: { x: number; y: number } }[]
     >();
-    if (Array.isArray(activeRoute.products)) {
-      for (const product of activeRoute.products) {
-        const nodeId = String(product.node_id ?? "");
+    if (Array.isArray(routeData?.products)) {
+      for (const product of routeData.products) {
+        const nodeId = String(product.node_id ?? "").trim();
         if (!nodeId) {
           continue;
         }
         const list = map.get(nodeId) ?? [];
         const numericId = Number(product.product_id);
         const productCoords =
-          coordinateLookup.get(nodeId) ??
           (typeof product.node_x === "number" && typeof product.node_y === "number"
             ? { x: product.node_x, y: product.node_y }
-            : undefined);
+            : undefined) ??
+          coordinateLookup.get(nodeId);
+        const overrideLabel = getNodeLabelOverride(nodeId);
         list.push({
           productId: Number.isFinite(numericId) ? numericId : null,
-          productName: product.name ?? `Product ${nodeId}`,
+          productName: overrideLabel ?? product.name ?? `Product ${nodeId}`,
           position: productCoords,
         });
         map.set(nodeId, list);
       }
     }
     return map;
-  }, [activeRoute, coordinateLookup]);
+  }, [routeData, coordinateLookup]);
+
+  const productLevelMap = useMemo(() => {
+    // Cache product shelf levels for quick lookup when rendering the checklist.
+    const map = new Map<number, number | null>();
+    for (const product of products) {
+      if (typeof product.id === "number") {
+        map.set(product.id, product.level ?? null);
+      }
+    }
+    return map;
+  }, [products]);
 
   const routeItems = useMemo(() => {
-    const items: { productId: number; productName: string; nodeId: string }[] = [];
+    // Flatten the ordered node list into checklist entries with readable labels.
+    const items: { productId: number; productName: string; nodeId: string; level?: number | null }[] = [];
     const orderedNodeIds =
-      Array.isArray(activeRoute.order) && activeRoute.order.length > 0
-        ? activeRoute.order.map((nodeId) => String(nodeId))
+      Array.isArray(routeData?.order) && routeData.order.length > 0
+        ? routeData.order.map((nodeId) => String(nodeId).trim())
         : Array.from(nodeProductMap.keys());
 
     for (const nodeId of orderedNodeIds) {
@@ -225,10 +271,13 @@ function App() {
       for (const product of productsAtNode) {
         const fallbackId = Number(nodeId);
         const numericId = product.productId ?? (Number.isFinite(fallbackId) ? fallbackId : items.length);
+        const resolvedId = Number.isFinite(numericId) ? Number(numericId) : items.length;
+        const overrideLabel = getNodeLabelOverride(nodeId);
         items.push({
-          productId: Number.isFinite(numericId) ? numericId : items.length,
-          productName: product.productName,
+          productId: resolvedId,
+          productName: overrideLabel ?? product.productName,
           nodeId,
+          level: productLevelMap.get(resolvedId) ?? null,
         });
       }
     }
@@ -236,59 +285,61 @@ function App() {
     if (items.length > 0) {
       return items;
     }
+    
 
     return selectedProducts.map((id) => {
       const product = products.find((entry) => entry.id === id);
+      const nodeId = pathNodeIds[0] ?? "";
+      const overrideLabel = getNodeLabelOverride(nodeId);
       return {
         productId: id,
-        productName: product?.name ?? "Unknown item",
-        nodeId: pathNodeIds[0] ?? "",
+        productName: overrideLabel ?? product?.name ?? "Unknown item",
+        nodeId,
+        level: product?.level ?? null,
       };
     });
-  }, [activeRoute, nodeProductMap, pathNodeIds, products, selectedProducts]);
+  }, [routeData, nodeProductMap, pathNodeIds, productLevelMap, products, selectedProducts]);
 
   const routeSignature = useMemo(
+    // Signature is used to reset local state when the route changes.
     () => routeItems.map((item) => `${item.productId}-${item.nodeId}`).join("|"),
     [routeItems]
   );
 
   useEffect(() => {
+    // Reset focus to the first item when the user opens the route view.
     if (view === "route") {
       setActiveIndex(0);
     }
   }, [view, routeSignature]);
 
   useEffect(() => {
+    // Clear completion state whenever a new route arrives.
     setCompleted(new Array(routeItems.length).fill(false));
     setActiveIndex(0);
   }, [routeItems.length, routeSignature, view]);
 
   useEffect(() => {
+    // Reset map panel size when leaving the route view.
     if (view !== "route") {
       setMapPanelSize(null);
     }
   }, [view]);
 
   const directions = useMemo(() => {
-    if (!Array.isArray(activeRoute.segments)) {
+    if (pathNodes.length === 0) {
       return [];
     }
-    const labelFor = (nodeId: string) => {
-      const productsAtNode = nodeProductMap.get(nodeId);
-      if (productsAtNode && productsAtNode.length > 0) {
-        return productsAtNode[0].productName;
-      }
-      return nodeId;
-    };
-    return activeRoute.segments.map((segment) => {
-      const distance = typeof segment.cost === "number" ? segment.cost : 0;
-      const originLabel = labelFor(segment.from);
-      const destinationLabel = labelFor(segment.to);
-      return `Walk ${distance.toFixed(1)} meters from ${originLabel} to ${destinationLabel}.`;
+    return buildNavigationInstructions({
+      path: pathNodes,
+      routeItems,
+      nodeProductMap,
+      resolveNodeName: (nodeId) => getNodeLabelOverride(nodeId) ?? nodeId,
     });
-  }, [activeRoute, nodeProductMap]);
+  }, [pathNodes, routeItems, nodeProductMap]);
 
   const contentGridStyle = useMemo<CSSProperties | undefined>(() => {
+    // Tie the map height to the measured canvas size for consistent layout.
     if (!mapPanelSize) {
       return undefined;
     }
@@ -296,6 +347,7 @@ function App() {
   }, [mapPanelSize]);
 
   const toggleProduct = (id: number) => {
+    // Allow users to add or remove products from their shopping list.
     setSelectedProducts((previous) => {
       if (previous.includes(id)) {
         return previous.filter((entry) => entry !== id);
@@ -305,14 +357,23 @@ function App() {
   };
 
   const handleToggleComplete = useCallback((index: number) => {
+    // Guard completion so only the first incomplete item can be checked.
     setCompleted((prev) => {
       const next = [...prev];
-      next[index] = !next[index];
+      const firstIncomplete = next.findIndex((value) => !value);
+      if (firstIncomplete === -1) {
+        return prev;
+      }
+      if (index !== firstIncomplete) {
+        return prev;
+      }
+      next[index] = true;
       return next;
     });
   }, []);
 
   useEffect(() => {
+    // Advance the active index to the next incomplete item.
     const firstIncomplete = completed.findIndex((value) => !value);
     if (firstIncomplete === -1) {
       setActiveIndex(routeItems.length);
@@ -322,10 +383,12 @@ function App() {
   }, [completed, routeItems.length]);
 
   const handleSetActive = (index: number) => {
+    // Allow keyboard focus to follow programmatic scroll in the checklist.
     setActiveIndex(index);
   };
 
   const handleMapDimensionsChange = useCallback((size: { width: number; height: number }) => {
+    // Cache canvas dimensions so the layout grid can adjust once rendering finishes.
     setMapPanelSize((previous) => {
       if (previous && previous.width === size.width && previous.height === size.height) {
         return previous;
@@ -335,6 +398,7 @@ function App() {
   }, []);
 
   const handleShowRoute = async () => {
+    // Request a new route from the backend for the selected products.
     if (selectedProducts.length === 0 || isLoadingRoute) {
       return;
     }
@@ -371,10 +435,11 @@ function App() {
   };
 
   const handleEditSelection = () => {
+    // Return to the selection view so the user can adjust the basket.
     setView("select");
   };
 
-  const activeSegments = Array.isArray(activeRoute.segments) ? activeRoute.segments : [];
+  const activeSegments = Array.isArray(routeData?.segments) ? routeData.segments : [];
   const unclampedSegmentIndex =
     routeItems.length === 0
       ? activeSegments.length - 1
@@ -413,13 +478,24 @@ function App() {
     return checkoutNodeId ?? entryNodeId ?? undefined;
   })();
 
+  const targetLabel = (() => {
+    if (routeItems.length === 0) {
+      return "Checkout";
+    }
+    if (activeIndex < routeItems.length) {
+      return routeItems[activeIndex]?.productName ?? "Produkt";
+    }
+    return "Checkout";
+  })();
+
   const previewPath: RouteNode[] = pathNodes.length > 0 ? pathNodes : [{ nodeId: "origin", x: 0, y: 0 }];
 
   // Build an ordered, edge-following path from the route's segments. Each segment may contain
   // `path_coordinates` (preferred) or a `path` (node ids) which we resolve via coordinateLookup.
   const enrichedPath = useMemo<RouteNode[]>(() => {
     const out: RouteNode[] = [];
-    if (!Array.isArray(activeRoute.segments) || activeRoute.segments.length === 0) {
+    const segments = Array.isArray(routeData?.segments) ? routeData.segments : [];
+    if (segments.length === 0) {
       return pathNodes.length > 0 ? pathNodes : out;
     }
 
@@ -430,7 +506,7 @@ function App() {
       }
     };
 
-    for (const seg of activeRoute.segments) {
+    for (const seg of segments) {
       // prefer coordinates directly provided on the segment
       if (Array.isArray((seg as any).path_coordinates) && (seg as any).path_coordinates.length > 0) {
         for (const coord of (seg as any).path_coordinates) {
@@ -459,34 +535,38 @@ function App() {
     // If we ended up empty (no segments with coords), fallback to pathNodes
     if (out.length === 0 && pathNodes.length > 0) return pathNodes;
     return out;
-  }, [activeRoute.segments, coordinateLookup, pathNodes]);
+  }, [routeData, coordinateLookup, pathNodes]);
 
   const effectiveActiveIndex = routeItems.length > 0 ? Math.min(activeIndex, routeItems.length - 1) : -1;
+  const completedStepsCount = useMemo(() => completed.filter(Boolean).length, [completed]);
 
   return (
     <div className="app-shell">
-      {view === "select" && (
-        <ProductList
-          products={products}
-          selectedIds={selectedProducts}
-          searchTerm={searchTerm}
-          onToggle={toggleProduct}
-          onSearchChange={setSearchTerm}
-          onConfirm={handleShowRoute}
-          canConfirm={selectedProducts.length > 0}
-          confirmLabel="Show route"
-          isLoading={isLoadingRoute || productsLoading}
-          errorMessage={combinedErrorMessage}
-        />
-      )}
+      <header className="app-page-header">
+        <h1>Grocery Store Navigation</h1>
+        {view === "route" && (
+          <button type="button" className="secondary-button" onClick={handleEditSelection}>
+            Edit selection
+          </button>
+        )}
+      </header>
+      <main className="app-main">
+        {view === "select" && (
+          <ProductList
+            products={products}
+            selectedIds={selectedProducts}
+            searchTerm={searchTerm}
+            onToggle={toggleProduct}
+            onSearchChange={setSearchTerm}
+            onConfirm={handleShowRoute}
+            canConfirm={selectedProducts.length > 0}
+            confirmLabel="Show route"
+            isLoading={isLoadingRoute || productsLoading}
+            errorMessage={combinedErrorMessage}
+          />
+        )}
 
-      {view === "route" && routeData && (
-        <>
-          <div className="route-header">
-            <button type="button" className="secondary-button" onClick={handleEditSelection}>
-              Edit selection
-            </button>
-          </div>
+        {view === "route" && routeData && (
           <div className="content-grid" style={contentGridStyle}>
             <MapPreview
               path={enrichedPath}
@@ -494,10 +574,16 @@ function App() {
               activeSegmentIndex={activeSegmentIndex}
               currentNodeId={currentNodeId}
               targetNodeId={targetNodeId}
+              targetLabel={targetLabel}
               polygons={layoutPolygons ?? undefined}
               onDimensionsChange={handleMapDimensionsChange}
             />
-            <RouteSummary totalDistance={activeRoute.total_cost ?? 0} directions={directions} />
+            <RouteSummary
+              totalDistance={routeData?.total_cost ?? 0}
+              directions={directions}
+              activeIndex={activeSegmentIndex}
+              completedCount={completedStepsCount}
+            />
             <SelectedChecklist
               items={routeItems}
               activeIndex={effectiveActiveIndex}
@@ -506,12 +592,17 @@ function App() {
               onSetActive={handleSetActive}
             />
           </div>
-        </>
-      )}
+        )}
 
-      {view === "route" && !routeData && (
-        <p style={{ color: "#dc2626" }}>No route data available. Please return to the selection and try again.</p>
-      )}
+        {view === "route" && !routeData && (
+          <p style={{ color: "#dc2626" }}>No route data available. Please return to the selection and try again.</p>
+        )}
+      </main>
+
+      <footer className="app-footer">
+        <span className="footer-context">Location Based Services WiSe 25/26</span>
+        <span className="footer-authors">Nicolas Diaczyszyn | David Engler | Kes Lo | Niklas Menz</span>
+      </footer>
     </div>
   );
 }

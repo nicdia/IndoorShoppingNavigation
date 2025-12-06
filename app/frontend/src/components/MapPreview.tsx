@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { RouteNode, RouteSegment, StorePolygon } from "../mockData";
+import { RouteNode, RouteSegment, StorePolygon } from "../types/route";
+import checkoutPinUrl from "../assets/icons/checkout-pin.svg";
+
+// Draws the store layout along with the shopper path and markers.
 
 type MapPreviewProps = {
   path: RouteNode[];
@@ -7,12 +10,17 @@ type MapPreviewProps = {
   activeSegmentIndex: number;
   currentNodeId?: string;
   targetNodeId?: string;
+  targetLabel?: string;
   polygons?: StorePolygon[];
   onDimensionsChange?: (dimensions: { width: number; height: number }) => void;
 };
 
 const CANVAS_LONG_SIDE = 520;
 const PADDING = 24;
+
+// Keep reference to the legacy checkout icon asset while it remains commented out for evaluation.
+const legacyCheckoutPinUrl = checkoutPinUrl;
+void legacyCheckoutPinUrl;
 
 type ProjectedNode = RouteNode & { screenX: number; screenY: number };
 type ProjectedPolygon = StorePolygon & { screenPoints: { x: number; y: number }[] };
@@ -26,6 +34,7 @@ type Bounds = {
 };
 
 function collectBounds(nodes: RouteNode[], polygons?: StorePolygon[]): Bounds {
+  // Compute the visible canvas window so the geometry fits the viewport.
   const xs = [...nodes.map((node) => node.x)];
   const ys = [...nodes.map((node) => node.y)];
   if (polygons) {
@@ -50,6 +59,7 @@ function collectBounds(nodes: RouteNode[], polygons?: StorePolygon[]): Bounds {
 }
 
 function projectGeometry(nodes: RouteNode[], polygons?: StorePolygon[]) {
+  // Project map coordinates into canvas space while keeping proportions.
   const bounds = collectBounds(nodes, polygons);
   const projectPoint = (x: number, y: number) => ({
     x: (x - bounds.minX) * bounds.scale + PADDING,
@@ -79,10 +89,12 @@ export function MapPreview({
   activeSegmentIndex,
   currentNodeId,
   targetNodeId,
+  targetLabel,
   polygons,
   onDimensionsChange,
 }: MapPreviewProps) {
   const augmentedPath = useMemo(() => {
+    // Include every segment waypoint so the map stays continuous.
     const map = new Map<string, RouteNode>();
     for (const node of path) {
       map.set(node.nodeId, node);
@@ -102,6 +114,52 @@ export function MapPreview({
   const lookup = new Map(projectedNodes.map((node) => [node.nodeId, node]));
   const currentNode = currentNodeId ? lookup.get(currentNodeId) : undefined;
   const targetNode = targetNodeId ? lookup.get(targetNodeId) : undefined;
+  const targetCallout = useMemo(() => {
+    // Position the target label so it avoids overlapping the marker.
+    if (!targetNode) {
+      return undefined;
+    }
+    const diagonalLength = 18;
+    const horizontalLength = 28;
+    const rightSpace = canvasWidth - targetNode.screenX;
+    const leftSpace = targetNode.screenX;
+    const direction: 1 | -1 = rightSpace >= leftSpace ? 1 : -1;
+    const angleDegrees = direction === 1 ? -45 : -135;
+    const angle = (angleDegrees * Math.PI) / 180;
+    const start = { x: targetNode.screenX, y: targetNode.screenY };
+    const kink = {
+      x: start.x + Math.cos(angle) * diagonalLength,
+      y: start.y + Math.sin(angle) * diagonalLength,
+    };
+    const end = {
+      x: kink.x + direction * horizontalLength,
+      y: kink.y,
+    };
+    const label = {
+      x: end.x + direction * 6,
+      y: end.y,
+    };
+    const textAnchor: "start" | "end" = direction === 1 ? "start" : "end";
+    return { start, kink, end, label, textAnchor };
+  }, [targetNode, canvasWidth]);
+  const segmentPaths = segments
+    .map((segment, index) => {
+      const points = segment.path
+        .map((nodeId) => lookup.get(nodeId))
+        .filter((node): node is ProjectedNode => Boolean(node));
+      if (points.length < 2) {
+        return null;
+      }
+      const pathData = points
+        .map((point, idx) => `${idx === 0 ? "M" : "L"}${point.screenX} ${point.screenY}`)
+        .join(" ");
+      return {
+        key: `${segment.from}-${segment.to}-${index}`,
+        pathData,
+        isActive: index === activeSegmentIndex,
+      };
+    })
+    .filter((entry): entry is { key: string; pathData: string; isActive: boolean } => Boolean(entry));
   const aspectRatio = canvasWidth / canvasHeight;
 
   const [viewport, setViewport] = useState(() => ({
@@ -110,6 +168,7 @@ export function MapPreview({
   }));
 
   useEffect(() => {
+    // Track viewport updates so the canvas can respond to resizing.
     const update = () => {
       setViewport({ width: window.innerWidth, height: window.innerHeight });
     };
@@ -131,6 +190,7 @@ export function MapPreview({
     : { width: `${displayWidth}px`, height: `${displayHeight}px` };
 
   useEffect(() => {
+    // Share the final render size with the parent layout.
     onDimensionsChange?.({ width: displayWidth, height: displayHeight });
   }, [displayWidth, displayHeight, onDimensionsChange]);
 
@@ -155,51 +215,60 @@ export function MapPreview({
               className="map-polygon"
             />
           ))}
-          {segments.map((segment, index) => {
-            const points = segment.path
-              .map((nodeId) => lookup.get(nodeId))
-              .filter((node): node is ProjectedNode => Boolean(node));
-            if (points.length < 2) {
-              return null;
-            }
-            const pathData = points
-              .map((point, idx) => `${idx === 0 ? "M" : "L"}${point.screenX} ${point.screenY}`)
-              .join(" ");
-            const isActive = index === activeSegmentIndex;
-            return (
-              <path
-                key={`${segment.from}-${segment.to}`}
-                d={pathData}
-                className={isActive ? "route-segment active" : "route-segment passive"}
-              />
-            );
-          })}
-          {projectedNodes.map((node) => (
-            <text
-              key={node.nodeId}
-              x={node.screenX + 6}
-              y={node.screenY - 6}
-              fontSize={"10px"}
-              fill="#222"
-              stroke="#fff"
-              strokeWidth={0.5}
-              style={{ pointerEvents: "none" }}
-            >
-              {node.nodeId}
-            </text>
-          ))}
+          {segmentPaths
+            .filter((segment) => !segment.isActive)
+            .map((segment) => (
+              <path key={segment.key} d={segment.pathData} className="route-segment passive" />
+            ))}
+          {segmentPaths
+            .filter((segment) => segment.isActive)
+            .map((segment) => (
+              <path key={`${segment.key}-active`} d={segment.pathData} className="route-segment active" />
+            ))}
+          {/* Node ID overlay removed because it was only used for debugging */}
           {currentNode && (
             <g className="current-node" transform={`translate(${currentNode.screenX}, ${currentNode.screenY})`}>
               <circle className="pulse" r={12} />
               <circle className="core" r={5.5} />
             </g>
           )}
-          {targetNode && (
-            <g className="target-node" transform={`translate(${targetNode.screenX}, ${targetNode.screenY})`}>
-              <circle className="halo" r={8} />
-              <circle className="core" r={4} />
+          {targetCallout && (
+            <g className="target-callout">
+              <circle className="target-anchor" cx={targetCallout.start.x} cy={targetCallout.start.y} r={4.5} />
+              <polyline
+                className="target-callout-line"
+                points={`${targetCallout.start.x},${targetCallout.start.y} ${targetCallout.kink.x},${targetCallout.kink.y} ${targetCallout.end.x},${targetCallout.end.y}`}
+              />
+              {targetLabel && (
+                <text
+                  className="target-callout-label"
+                  x={targetCallout.label.x}
+                  y={targetCallout.label.y}
+                  dominantBaseline="middle"
+                  textAnchor={targetCallout.textAnchor}
+                >
+                  {targetLabel}
+                </text>
+              )}
             </g>
           )}
+          {/*
+          {targetNode && (
+            <g className="target-node" transform={`translate(${targetNode.screenX}, ${targetNode.screenY})`}>
+              <g className="pin-wrapper" transform="rotate(-12)">
+                <image
+                  className="pin-image"
+                  href={checkoutPinUrl}
+                  width={32}
+                  height={48}
+                  x={-17}
+                  y={-38}
+                  preserveAspectRatio="xMidYMax meet"
+                />
+              </g>
+            </g>
+          )}
+          */}
         </svg>
       </div>
     </section>

@@ -14,7 +14,7 @@ All commands below assume a Windows PowerShell shell. Adapt paths if your worksp
 
 ---
 
-## Backend (FastAPI)
+<!-- ## Backend (FastAPI)
 
 The backend serves mock responses for `/products` and `/route`. It is meant to mirror the structure of the future pathfinding service while the database integration is under development.
 
@@ -45,15 +45,15 @@ The API will be available at `http://127.0.0.1:8000`. CORS is fully open for dev
 
 You can inspect these responses in a browser or via Swagger UI at `http://127.0.0.1:8000/docs` once the server is running.
 
----
+--- -->
 
 ## Frontend (React + Vite)
 
-The frontend resides in `frontend/` and visualises the store map, the current route, and the selected checklist items.
+The frontend lives in `app/frontend/` and visualises the store map, the current route, and the selected checklist items.
 
 1. Change into the frontend folder:
 	```powershell
-	cd .\frontend
+  cd .\app\frontend
 	```
 2. Install dependencies (only needed once or whenever `package.json` changes):
 	```powershell
@@ -73,7 +73,7 @@ VITE_API_BASE_URL=http://localhost:9000
 
 ### Static Layout Data
 
-`frontend/public/layout.json` provides polygon data for drawing the store map. Adjust this file if the store layout changes; the frontend fetches it automatically on load.
+`app/frontend/public/layout.json` provides polygon data for drawing the store map. Adjust this file if the store layout changes; the frontend fetches it automatically on load.
 
 ### UX Behaviour
 
@@ -94,11 +94,11 @@ cd .\backend
 uvicorn main:app --reload
 
 # Terminal 2 (frontend)
-cd .\frontend
+cd .\app\frontend
 npm run dev
 ```
 
-The frontend fetches product lists and new routes from the backend automatically when the user moves between selection and route views. Adjust the mock responses to test different scenarios.
+The frontend fetches product lists and new routes from the backend automatically when the user moves between selection and route views. Ensure the backend endpoints return real data; there are no longer any frontend mock fallbacks.
 
 ---
 

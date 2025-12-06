@@ -1,10 +1,16 @@
 # services/route_planner_service.py
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
+import math
+import os
 import networkx as nx
 from math import hypot
 from db.db import fetch_edges, fetch_product_nodes_by_names, fetch_node_coordinates_by_ids
 
 _GRAPH: Optional[nx.DiGraph] = None
+
+ENTRY_NODE_ID = os.environ.get("ENTRY_NODE_ID", "21").strip() or None
+_CHECKOUT_RAW = os.environ.get("CHECKOUT_NODE_IDS", "14,15")
+CHECKOUT_NODE_IDS = [n.strip() for n in _CHECKOUT_RAW.split(",") if n.strip()]
 
 
 def get_graph() -> nx.DiGraph:
@@ -34,147 +40,67 @@ def _euclid(a: Dict[str, Any], b: Dict[str, Any]) -> float:
 
 
 def plan_route_by_names(product_names: List[str]) -> Dict[str, Any]:
-    """
-    Route über echte Kanten (Dijkstra). Wenn ein Node vom aktuellen aus nicht erreichbar ist,
-    wird ein neuer Teilpfad gestartet. Die Lücke wird als Segment mit `disconnected: true`
-    und euklidischer Distanz markiert, damit Frontend/Debugging trotzdem eine komplette Reihenfolge sieht.
-    Start: erster Produktknoten.
-    """
+    """Plane eine Route, die immer beim Eingang startet und an einer Kasse endet."""
     rows = fetch_product_nodes_by_names(product_names)
-    if not rows:
-        return {"total_cost": 0.0, "segments": [], "order": [], "way_nodes": [], "products": []}
-
-    # Normalisiere Produkt-Daten
-    products = [
-        {
+    products: List[Dict[str, Any]] = []
+    for r in rows:
+        products.append({
             "product_id": r["product_id"],
             "name": r["product_name"],
             "node_id": str(r["node_id"]),
             "node_x": float(r["node_x"]),
             "node_y": float(r["node_y"]),
-        }
-        for r in rows
-    ]
+        })
 
-    # Map: node_id -> full product dict (für schnelle Koordinatenlookups)
-    node_info = {p["node_id"]: p for p in products}
+    # Map: node_id -> Produkt / Knoten Infos
+    node_info: Dict[str, Dict[str, Any]] = {p["node_id"]: dict(p) for p in products}
 
-    # Start = erster Produktknoten
-    remaining = [str(p["node_id"]) for p in products]
-    route_nodes: List[str] = []
-    segments: List[Dict[str, Any]] = []
-    way_nodes: List[str] = []
-    total_cost = 0.0
+    entry_node = ENTRY_NODE_ID
+    checkout_nodes = CHECKOUT_NODE_IDS[:]
 
-    if not remaining:
-        return {"total_cost": 0.0, "segments": [], "order": [], "way_nodes": [], "products": []}
+    extra_nodes = [n for n in [entry_node, *checkout_nodes] if n and n not in node_info]
+    if extra_nodes:
+        coords = fetch_node_coordinates_by_ids(extra_nodes)
+        for node_id, xy in coords.items():
+            node_info[node_id] = {
+                "product_id": None,
+                "name": None,
+                "node_id": node_id,
+                "node_x": xy["x"],
+                "node_y": xy["y"],
+            }
+
+    product_nodes_order = [p["node_id"] for p in products]
+    unique_product_nodes = _unique_order_preserving(product_nodes_order)
 
     G = get_graph()
+    relevant_nodes: List[str] = _unique_order_preserving(
+        [entry_node] + unique_product_nodes + checkout_nodes if entry_node else unique_product_nodes + checkout_nodes
+    )
 
-    # lightweight debug: show graph size and a sample of nodes (don't spam full list)
-    try:
-        sample_nodes = list(G.nodes())[:10]
-        print(f"[route_planner] loaded graph: nodes={len(G.nodes())}, sample_nodes={sample_nodes}")
-    except Exception as _e:
-        print("[route_planner] could not inspect graph nodes", _e)
+    dist_cache, path_cache = _compute_pairwise_shortest_paths(G, relevant_nodes)
 
-    # Seed mit erstem Knoten
-    current = remaining.pop(0)
-    route_nodes.append(current)
-    # way_nodes startet noch leer; füllen wir während der Segmente
+    route_nodes: List[str] = []
+    planned_cost = math.inf
 
-    while remaining:
-        # Kandidaten, die von 'current' erreichbar sind
-        reachable = []
-        for n in remaining:
-            n_str = str(n)
-            in_graph_current = current in G
-            in_graph_n = n_str in G
-            path_exists = False
-            try:
-                path_exists = nx.has_path(G, current, n_str) if in_graph_current and in_graph_n else False
-            except Exception as e:
-                print(f"[route_planner] nx.has_path raised for {current}->{n_str}:", e)
-                path_exists = False
-            if path_exists:
-                # sichere Länge via Dijkstra
-                try:
-                    dist = nx.dijkstra_path_length(G, current, n_str, weight="weight")
-                    reachable.append((n_str, dist))
-                except Exception as e:
-                    print(f"[route_planner] dijkstra_path_length failed for {current}->{n_str}:", e)
+    if entry_node and (unique_product_nodes or checkout_nodes):
+        route_nodes, planned_cost = _build_entry_to_checkout_sequence(
+            entry_node, unique_product_nodes, checkout_nodes, dist_cache
+        )
 
-        # debug summary for this iteration
-        print(f"[route_planner] current={current} (in_graph={current in G}), remaining={remaining}")
-        print(f"[route_planner] reachable_candidates={reachable}")
+    if not route_nodes:
+        # Fallback: verwende Produkte in Eingabereihenfolge und hänge erste Kasse an
+        fallback_nodes = []
+        if entry_node:
+            fallback_nodes.append(entry_node)
+        fallback_nodes += unique_product_nodes
+        if checkout_nodes:
+            fallback_nodes.append(checkout_nodes[0])
+        route_nodes = _unique_adjacent_preserving(fallback_nodes) if fallback_nodes else unique_product_nodes[:]
 
-        if reachable:
-            # Nächster via Graph-Distanz
-            nxt = min(reachable, key=lambda x: x[1])[0]
-            try:
-                path_nodes = nx.dijkstra_path(G, current, nxt, weight="weight")
-                cost = nx.dijkstra_path_length(G, current, nxt, weight="weight")
-            except Exception as e:
-                print(f"[route_planner] dijkstra failed for {current}->{nxt}:", e)
-                path_nodes = [current, nxt]
-                cost = float('inf')
-            total_cost += cost if cost != float('inf') else 0.0
-
-            print(f"[route_planner] chosen next={nxt}, path_nodes={path_nodes}, cost={cost}")
-
-            # way_nodes verketten ohne Doppelung
-            if way_nodes and path_nodes and way_nodes[-1] == path_nodes[0]:
-                way_nodes += path_nodes[1:]
-            else:
-                way_nodes += path_nodes
-
-            segments.append({
-                "from": current,
-                "to": nxt,
-                "cost": cost,
-                "path": [str(nid) for nid in path_nodes],
-                "disconnected": False
-            })
-
-            route_nodes.append(nxt)
-            remaining.remove(nxt)
-            current = nxt
-        else:
-            # Kein erreichbarer Kandidat → neue Komponente.
-            # Wähle den nächstgelegenen (euklidisch) als neuen Start, markiere Segment als 'disconnected'.
-            # (So siehst du die Lücke, bis Edges ergänzt/gerichtet sind.)
-            if not remaining:
-                break
-            # wähle per Euklid von current zu jedem remaining (falls current nicht im node_info ist, nimm einfach remaining[0])
-            if current in node_info:
-                nxt = min(remaining, key=lambda n: _euclid(node_info[current], node_info[n]))
-                eu_cost = _euclid(node_info[current], node_info[nxt])
-                print(f"[route_planner] no graph path: teleporting from {current} to {nxt} with euclid cost {eu_cost}")
-            else:
-                nxt = remaining[0]
-                eu_cost = 0.0  # keine Koordinaten für current vorhanden
-
-                print(f"[route_planner] no coords for current {current}, picking {nxt} as next (eu_cost=0)")
-
-            # "teleport"-Segment rein, damit die Reihenfolge sichtbar bleibt
-            segments.append({
-                "from": current,
-                "to": nxt,
-                "cost": eu_cost,
-                "path": [current, nxt],
-                "disconnected": True
-            })
-            total_cost += eu_cost
-
-            # neuer Start
-            route_nodes.append(nxt)
-            # way_nodes nur minimal erweitern (wir haben keinen echten Pfad)
-            if way_nodes and way_nodes[-1] == current:
-                way_nodes.append(nxt)
-            else:
-                way_nodes += [current, nxt]
-            remaining.remove(nxt)
-            current = nxt
+    segments, way_nodes, total_cost = _build_segments(
+        route_nodes, path_cache, dist_cache, node_info
+    )
 
     # Produkte in Besuchsreihenfolge
     node_to_products: Dict[str, List[Dict[str, Any]]] = {}
@@ -242,3 +168,181 @@ def plan_route_by_names(product_names: List[str]) -> Dict[str, Any]:
         "node_coordinates": coordinate_sources,
         "waypoint_coordinates": waypoint_coordinates,
     }
+
+
+def _unique_order_preserving(seq: List[Optional[str]]) -> List[str]:
+    seen = set()
+    ordered: List[str] = []
+    for item in seq:
+        if not item:
+            continue
+        if item not in seen:
+            seen.add(item)
+            ordered.append(item)
+    return ordered
+
+
+def _unique_adjacent_preserving(seq: List[str]) -> List[str]:
+    """Entfernt nur direkt aufeinanderfolgende Duplikate, damit Entry==erstes Produkt sauber bleibt."""
+    if not seq:
+        return []
+    cleaned = [seq[0]]
+    for node in seq[1:]:
+        if node != cleaned[-1]:
+            cleaned.append(node)
+    return cleaned
+
+
+def _build_entry_to_checkout_sequence(
+    entry: str,
+    items: List[str],
+    checkouts: List[str],
+    dist: Dict[str, Dict[str, float]],
+) -> Tuple[List[str], float]:
+    if not items:
+        return _best_entry_checkout_only(entry, checkouts, dist)
+
+    best_order, best_cost = _bnb(
+        current=entry,
+        remaining=items,
+        cost=0.0,
+        order_prefix=[entry],
+        dist=dist,
+        checkouts=checkouts,
+        best=(None, math.inf),
+    )
+    if best_order:
+        return best_order, best_cost
+
+    fallback = [entry] + items + ([checkouts[0]] if checkouts else [])
+    return _unique_adjacent_preserving(fallback), math.inf
+
+
+def _best_entry_checkout_only(
+    entry: str,
+    checkouts: List[str],
+    dist: Dict[str, Dict[str, float]],
+) -> Tuple[List[str], float]:
+    best_checkout = None
+    best_cost = math.inf
+    for checkout in checkouts:
+        d = dist.get(entry, {}).get(checkout, math.inf)
+        if math.isfinite(d) and d < best_cost:
+            best_checkout = checkout
+            best_cost = d
+    if best_checkout:
+        return [entry, best_checkout], best_cost
+    if checkouts:
+        return _unique_adjacent_preserving([entry, checkouts[0]]), math.inf
+    return [entry], 0.0
+
+
+def _bnb(
+    current: str,
+    remaining: List[str],
+    cost: float,
+    order_prefix: List[str],
+    dist: Dict[str, Dict[str, float]],
+    checkouts: List[str],
+    best: Tuple[Optional[List[str]], float],
+) -> Tuple[Optional[List[str]], float]:
+    best_order, best_cost = best
+    if cost >= best_cost:
+        return best_order, best_cost
+
+    if not remaining:
+        for checkout in checkouts:
+            d = dist.get(current, {}).get(checkout, math.inf)
+            total = cost + d
+            if math.isfinite(total) and total < best_cost:
+                best_order = order_prefix + [checkout]
+                best_cost = total
+        return best_order, best_cost
+
+    sorted_remaining = sorted(
+        remaining,
+        key=lambda node: dist.get(current, {}).get(node, math.inf)
+    )
+    for nxt in sorted_remaining:
+        d = dist.get(current, {}).get(nxt, math.inf)
+        if not math.isfinite(d):
+            continue
+        new_remaining = [r for r in remaining if r != nxt]
+        best_order, best_cost = _bnb(
+            nxt,
+            new_remaining,
+            cost + d,
+            order_prefix + [nxt],
+            dist,
+            checkouts,
+            (best_order, best_cost),
+        )
+    return best_order, best_cost
+
+
+def _compute_pairwise_shortest_paths(
+    graph: nx.DiGraph,
+    nodes: List[str],
+) -> Tuple[Dict[str, Dict[str, float]], Dict[str, Dict[str, List[str]]]]:
+    dist: Dict[str, Dict[str, float]] = {n: {} for n in nodes}
+    spath: Dict[str, Dict[str, List[str]]] = {n: {} for n in nodes}
+    for source in nodes:
+        if source not in graph:
+            continue
+        try:
+            lengths, paths = nx.single_source_dijkstra(graph, source, weight="weight")
+        except Exception as exc:
+            print(f"[route_planner] single_source_dijkstra failed for {source}: {exc}")
+            continue
+        for target in nodes:
+            if target == source:
+                continue
+            if target in lengths:
+                dist[source][target] = lengths[target]
+                spath[source][target] = [str(nid) for nid in paths[target]]
+            else:
+                dist[source][target] = math.inf
+                spath[source][target] = []
+    return dist, spath
+
+
+def _build_segments(
+    route_nodes: List[str],
+    path_cache: Dict[str, Dict[str, List[str]]],
+    dist_cache: Dict[str, Dict[str, float]],
+    node_info: Dict[str, Dict[str, Any]],
+) -> Tuple[List[Dict[str, Any]], List[str], float]:
+    segments: List[Dict[str, Any]] = []
+    way_nodes: List[str] = []
+    total_cost = 0.0
+
+    for a, b in zip(route_nodes[:-1], route_nodes[1:]):
+        path_nodes = list(path_cache.get(a, {}).get(b, []))
+        cost = dist_cache.get(a, {}).get(b, math.inf)
+        disconnected = not path_nodes or not math.isfinite(cost)
+
+        if disconnected:
+            base = node_info.get(a)
+            target = node_info.get(b)
+            if base and target:
+                cost = _euclid(base, target)
+            else:
+                cost = 0.0
+            path_nodes = [a, b]
+
+        total_cost += cost
+
+        if way_nodes and path_nodes and way_nodes[-1] == path_nodes[0]:
+            way_nodes += path_nodes[1:]
+        else:
+            way_nodes += path_nodes
+
+        segments.append({
+            "from": a,
+            "to": b,
+            "cost": cost,
+            "path": path_nodes,
+            "disconnected": disconnected,
+        })
+
+    return segments, way_nodes, total_cost

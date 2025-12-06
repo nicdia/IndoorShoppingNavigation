@@ -2,25 +2,40 @@ import os
 import networkx as nx
 import matplotlib.pyplot as plt
 import heapq, math, itertools
+import sqlite3
 
-# TK/TCL Fix (Windows) - If TK/TCL path is not found
+# TK/TCL Fix (Windows) - comment out or edit lib path
 # os.environ['TCL_LIBRARY'] = r'C:\Users\nikla\AppData\Local\Programs\Python\Python313\tcl\tcl8.6'
 # os.environ['TK_LIBRARY']  = r'C:\Users\nikla\AppData\Local\Programs\Python\Python313\tcl\tk8.6'
 
-def select_items(G, ENTRY, CHECKOUTS):
+def db_query(product_name):
+    #connect to the db
+    dbfile = './shop_nav.db'
+    con = sqlite3.connect(dbfile)
+    cur = con.cursor()
+
+    for row in cur.execute(f"SELECT node_id FROM v_product_map WHERE product_name = '{product_name}'"):
+        print(row[0])
+        return(str(row[0]))
+
+    con.close()
+
+
+def select_items():
     # Interactively ask for item IDs
     items = []
     while True:
-        s = input("Enter Item ID between 1 and 150 (empty to finish): ")
-        if s == "":
+        s = db_query(input("Enter Item: "))
+        if s == None:
             return items
-        if not s.isdigit() or s not in G.nodes or s in [ENTRY, *CHECKOUTS]:
-            print("Item does not exist.")
-            continue
+        #if not s.isdigit() or s not in G.nodes or s in [ENTRY, *CHECKOUTS]:
+        #    print("Item does not exist.")
+        #    continue
         if s in items:
             print("Already in list.")
             continue
         items.append(s)
+        print(items)
 
 
 def dijkstra(graph: nx.Graph, origin: str, destination: str):
@@ -118,7 +133,7 @@ def visualize_route(G, pos, ENTRY, items, CHECKOUTS, walk, title="Optimal route 
 
 if __name__ == "__main__":
     # Load graph
-    G = nx.read_graphml("./resources/shop_graph.graphml")
+    G = nx.read_graphml("./graph_connected.graphml")
 
     # Ensure weights exist
     for u, v, d in G.edges(data=True):
