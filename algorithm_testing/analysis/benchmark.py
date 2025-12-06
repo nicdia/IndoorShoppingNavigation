@@ -1,4 +1,57 @@
-# analysis/benchmark.py
+"""
+Benchmark-Skript für die Indoor-Routing-Algorithmen (BnB + Dijkstra / A*).
+
+Ablauf / Aufbau:
+
+1) Algorithmus-Konfigurationen (CONFIGS)
+   - Es werden verschiedene Routing-Algorithmen konfiguriert, aktuell:
+         * bnb_dijkstra  (Branch & Bound + Dijkstra als Shortest-Path)
+         * bnb_astar     (Branch & Bound + A* als Shortest-Path)
+   - Für jeden Algorithmus kann festgelegt werden, wie oft die Laufzeit
+     gemessen werden soll (runtime_repeats).
+
+2) Testszenarien (SCENARIOS)
+   - Jedes Szenario beschreibt ein fixes Routing-Setup auf demselben Graphen:
+         * graph_path  → Pfad zur GraphML-Datei
+         * entry       → Einstiegs-Knoten
+         * items       → Liste von Item-Knoten, die besucht werden müssen
+         * checkouts   → mögliche Ziel-/Checkout-Knoten
+   - Die Szenarien unterscheiden sich v. a. durch die Anzahl und räumliche
+     Verteilung der Items (klein, mittel, groß), um unterschiedliche
+     Schwierigkeitsgrade abzudecken.
+
+3) run_experiments()
+   - Für jede Kombination aus (Szenario × Algorithmus) wird:
+         * der Graph geladen (mit sichergestelltem 'weight'-Attribut),
+         * der Algorithmus über evaluate_all_criteria ausgeführt,
+         * folgende Metriken extrahiert:
+               - runtime_seconds (Laufzeit, ggf. über mehrere Wiederholungen gemittelt)
+               - distance        (Gesamtdistanz entlang des Walks)
+               - turns           (Anzahl der Richtungswechsel im Walk)
+               - route_order     (Reihenfolge: Entry → Items → Checkout)
+               - walk_length     (Anzahl der Knoten im Walk)
+   - Alle Ergebnisse werden in einem DataFrame gesammelt, wobei jede Zeile
+     einem Setup "scenario__algorithm" entspricht.
+   - Dieses DataFrame ist die Grundlage für:
+         * Tabellenausgaben (output_table.py),
+         * Heatmap-Visualisierung (output_heatmap.py),
+         * Kriteriendiagramme (output_criteria_diagrams.py).
+
+4) run_scaling_experiments()
+   - Optionaler Benchmark zur Skalierung:
+         * Es wird für ein ausgewähltes Szenario die Anzahl der Items
+           variiert (n_items_list).
+         * Für jede Item-Anzahl und jeden Algorithmus werden Laufzeit,
+           Distanz und Turns gemessen.
+   - Ziel: zu analysieren, wie die Algorithmen mit wachsender Problemgröße
+     (mehr Items) skalieren.
+
+Ziel:
+Ein reproduzierbarer Benchmark-Rahmen, um Routing-Algorithmen anhand
+klarer Szenarien und einheitlicher Metriken zu vergleichen und sowohl
+Qualität (Distanz, Turns) als auch Effizienz (Laufzeit) auszuwerten.
+"""
+
 from __future__ import annotations
 from typing import Any, Dict, List
 
@@ -29,9 +82,6 @@ CONFIGS: List[Dict[str, Any]] = [
 ]
 
 
-# ---------------------------------------------------------
-# Testszenarien (Graph + Entry + Items + Checkouts)
-# ---------------------------------------------------------
 # ---------------------------------------------------------
 # Testszenarien (Graph + Entry + Items + Checkouts)
 # ---------------------------------------------------------
