@@ -1,0 +1,7 @@
+setup,scenario,algorithm_setup,algorithm,graph_path,entry,items,checkouts,n_items,n_checkouts,runtime_seconds,distance,turns,route_order,walk_length
+small_3_items__bnb_dijkstra,small_3_items,bnb_dijkstra,run_algorithm,resources/graph.graphml,21,"41,61,59","14,15",3,2,0.0015182666014879943,43.0,13,21 -> 41 -> 61 -> 59 -> 14,21
+small_3_items__bnb_astar,small_3_items,bnb_astar,run_algorithm,resources/graph.graphml,21,"41,61,59","14,15",3,2,0.0009073415771126747,43.0,13,21 -> 41 -> 61 -> 59 -> 14,21
+medium_6_items__bnb_dijkstra,medium_6_items,bnb_dijkstra,run_algorithm,resources/graph.graphml,21,"41,59,72,88,95,132","14,15",6,2,0.006681033410131931,89.0,24,21 -> 41 -> 59 -> 72 -> 132 -> 95 -> 88 -> 14,45
+medium_6_items__bnb_astar,medium_6_items,bnb_astar,run_algorithm,resources/graph.graphml,21,"41,59,72,88,95,132","14,15",6,2,0.004069908196106553,89.0,24,21 -> 41 -> 59 -> 72 -> 132 -> 95 -> 88 -> 14,45
+large_10_items__bnb_dijkstra,large_10_items,bnb_dijkstra,run_algorithm,resources/graph.graphml,21,"41,59,72,88,95,132,101,111,127,146","14,15",10,2,0.1627485000062734,129.0,28,21 -> 41 -> 59 -> 72 -> 132 -> 111 -> 127 -> 101 -> 146 -> 95 -> 88 -> 14,64
+large_10_items__bnb_astar,large_10_items,bnb_astar,run_algorithm,resources/graph.graphml,21,"41,59,72,88,95,132,101,111,127,146","14,15",10,2,0.1554606083780527,129.0,28,21 -> 41 -> 59 -> 72 -> 132 -> 111 -> 127 -> 101 -> 146 -> 95 -> 88 -> 14,64
