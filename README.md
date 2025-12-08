@@ -216,3 +216,25 @@ curl -X POST http://127.0.0.1:8000/route -H "Content-Type: application/json" \
     "59"
   ]
 }
+
+
+
+
+
+MERMAID SEQUENZDIAGRAMM UML CODE 
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant API as Backend API (Flask)
+    participant Controller as Route Controller
+    participant Service as Route Planner Service
+
+    User->>Frontend: Eingabe Route
+    Frontend->>API: POST / (JSON-Routenanfrage)
+    API->>Controller: compute_route()
+    Controller->>Service: berechne Route
+    Service-->>Controller: Routen-Ergebnis
+    Controller-->>API: HTTP Response (Route)
+    API-->>Frontend: JSON mit Route
+    Frontend-->>User: Zeige Route auf UI
