@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { ProductList } from "./components/ProductList";
+import { StartLocationSelector } from "./components/StartLocationSelector";
 import { MapPreview } from "./components/MapPreview";
 import { SelectedChecklist } from "./components/SelectedChecklist";
 import { RouteSummary } from "./components/RouteSummary";
@@ -17,6 +18,8 @@ const NODE_LABEL_OVERRIDES: Record<string, string> = {
   "14": "Checkout",
   "15": "Checkout",
 };
+
+const DEFAULT_ENTRY_NODE_ID = "21";
 
 const getNodeLabelOverride = (nodeId: string | number | null | undefined) => {
   if (nodeId === null || nodeId === undefined) {
@@ -48,13 +51,14 @@ function App() {
   const [productsError, setProductsError] = useState<string | null>(null);
 
   const [selectedProducts, setSelectedProducts] = useState<number[]>([]);
+  const [startNodeId, setStartNodeId] = useState<string>(DEFAULT_ENTRY_NODE_ID);
   const [routeData, setRouteData] = useState<RouteData | null>(null);
   const [isLoadingRoute, setIsLoadingRoute] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [completed, setCompleted] = useState<boolean[]>([]);
-  const [view, setView] = useState<"select" | "route">("select");
+    const [view, setView] = useState<"start" | "select" | "route">("start");
   const [layoutPolygons, setLayoutPolygons] = useState<StorePolygon[] | null>(null);
   const [mapPanelSize, setMapPanelSize] = useState<{ width: number; height: number } | null>(null);
 
@@ -131,6 +135,29 @@ function App() {
     const messages = [productsError, routeError].filter((value): value is string => Boolean(value));
     return messages.length > 0 ? messages.join(". ") : null;
   }, [productsError, routeError]);
+
+  const startOptions = useMemo(() => {
+    const entranceLabel = getNodeLabelOverride(DEFAULT_ENTRY_NODE_ID) ?? "Entrance";
+
+    const nodeLabelMap = new Map<string, string>();
+    products.forEach((product) => {
+      if (product.nodeId === null || product.nodeId === undefined) {
+        return;
+      }
+      const nodeValue = String(product.nodeId).trim();
+      if (!nodeValue || nodeLabelMap.has(nodeValue)) {
+        return;
+      }
+      const label = product.name?.trim() || `Product ${nodeValue}`;
+      nodeLabelMap.set(nodeValue, label);
+    });
+
+    const productOptions = Array.from(nodeLabelMap.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+
+    return [{ value: DEFAULT_ENTRY_NODE_ID, label: entranceLabel }, ...productOptions];
+  }, [products]);
 
   const coordinateLookup = useMemo(() => {
     // Build a lookup table for node coordinates with service data taking priority.
@@ -405,10 +432,16 @@ function App() {
     setRouteError(null);
     setIsLoadingRoute(true);
     try {
+      const requestPayload: Record<string, unknown> = {
+        productCodes: selectedProducts,
+      };
+      if (startNodeId) {
+        requestPayload.startNodeId = startNodeId;
+      }
       const response = await fetch(`${API_BASE_URL}/route`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productCodes: selectedProducts }),
+        body: JSON.stringify(requestPayload),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -544,6 +577,16 @@ function App() {
     <div className="app-shell">
       <header className="app-page-header">
         <h1>Grocery Store Navigation</h1>
+        {view === "select" && (
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => setView("start")}
+            disabled={isLoadingRoute || productsLoading}
+          >
+            Change start
+          </button>
+        )}
         {view === "route" && (
           <button type="button" className="secondary-button" onClick={handleEditSelection}>
             Edit selection
@@ -551,6 +594,18 @@ function App() {
         )}
       </header>
       <main className="app-main">
+        {view === "start" && (
+          <StartLocationSelector
+            options={startOptions}
+            selectedValue={startNodeId}
+            onSelect={setStartNodeId}
+            onConfirm={() => setView("select")}
+            confirmLabel="Select products"
+            isConfirmDisabled={productsLoading}
+            errorMessage={productsError}
+          />
+        )}
+
         {view === "select" && (
           <ProductList
             products={products}

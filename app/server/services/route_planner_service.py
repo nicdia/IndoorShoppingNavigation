@@ -39,8 +39,8 @@ def _euclid(a: Dict[str, Any], b: Dict[str, Any]) -> float:
                  float(a["node_y"]) - float(b["node_y"]))
 
 
-def plan_route_by_names(product_names: List[str]) -> Dict[str, Any]:
-    """Plane eine Route, die immer beim Eingang startet und an einer Kasse endet."""
+def plan_route_by_names(product_names: List[str], start_node_id: Optional[str] = None) -> Dict[str, Any]:
+    """Plane eine Route, die beim gewählten Startknoten beginnt und an einer Kasse endet."""
     rows = fetch_product_nodes_by_names(product_names)
     products: List[Dict[str, Any]] = []
     for r in rows:
@@ -55,7 +55,13 @@ def plan_route_by_names(product_names: List[str]) -> Dict[str, Any]:
     # Map: node_id -> Produkt / Knoten Infos
     node_info: Dict[str, Dict[str, Any]] = {p["node_id"]: dict(p) for p in products}
 
-    entry_node = ENTRY_NODE_ID
+    entry_override = None
+    if start_node_id is not None:
+        entry_override = str(start_node_id).strip()
+        if entry_override == "":
+            entry_override = None
+
+    entry_node = entry_override or ENTRY_NODE_ID
     checkout_nodes = CHECKOUT_NODE_IDS[:]
 
     extra_nodes = [n for n in [entry_node, *checkout_nodes] if n and n not in node_info]
