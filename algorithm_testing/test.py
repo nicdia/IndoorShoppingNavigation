@@ -4,6 +4,11 @@ import networkx as nx
 from criteria.metrics_wrapper import evaluate_all_criteria
 from algorithms.bnb_algorithm import run_algorithm
 #from algorithms.bnb_a_star import run_algorithm
+#from algorithms.CDSSSD import run_algorithm
+#from algorithms.MDMSMD import run_algorithm
+#from algorithms.EAMDSP import run_algorithm
+#from algorithms.nn_dijkstra import run_algorithm
+#from algorithms.nn_a_star import run_algorithm
 
 def load_graph(path: str) -> nx.Graph:
     """
@@ -22,7 +27,7 @@ if __name__ == "__main__":
     ENTRY = "21"
     CHECKOUTS = ["14", "15"]
     # Fixe Itemliste, damit Algorithmen vergleichbar sind
-    ITEMS = ["41", "61", "59"]  # Beispiel-IDs, anpassen wie gewünscht
+    ITEMS = ["41", "61", "59", "78", "86", "112", "143", "3"]  # Beispiel-IDs, anpassen wie gewünscht
 
     # Graph laden
     G = load_graph(GRAPH_PATH)
