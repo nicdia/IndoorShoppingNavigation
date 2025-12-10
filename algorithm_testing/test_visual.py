@@ -13,7 +13,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 
 from criteria.metrics_wrapper import evaluate_all_criteria
-from algorithms.bnb_algorithm import run_algorithm
+from algorithms.bnb_dijkstra import run_algorithm
 #from algorithms.bnb_a_star import run_algorithm
 #from algorithms.CDSSSD import run_algorithm
 #from algorithms.MDMSMD import run_algorithm
