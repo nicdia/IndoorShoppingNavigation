@@ -34,6 +34,15 @@ export type RouteSegment = {
   cost: number;
   disconnected?: boolean;
   path_coordinates?: WaypointCoordinate[];
+  path_edges?: RoutePathEdge[];
+};
+
+export type RoutePathEdge = {
+  from: string;
+  to: string;
+  length?: number | null;
+  left_shelf?: string | null;
+  right_shelf?: string | null;
 };
 
 export type StorePolygon = {

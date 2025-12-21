@@ -6,7 +6,7 @@ import { SelectedChecklist } from "./components/SelectedChecklist";
 import { RouteSummary } from "./components/RouteSummary";
 import { Product, RouteData, RouteNode, StorePolygon } from "./types/route";
 import { NODE_COORDINATES } from "./data/nodeCoordinates";
-import { buildNavigationInstructions } from "./utils/navigationText";
+import { buildNavigationInstructions, EdgeAnnotationLookup, makeEdgeKey } from "./utils/navigationText";
 
 // Central application component driving product selection and route execution.
 
@@ -240,6 +240,54 @@ function App() {
     });
   }, [coordinateLookup, pathNodeIds]);
 
+  const edgeAnnotations = useMemo<EdgeAnnotationLookup>(() => {
+    const map: EdgeAnnotationLookup = new Map();
+    const segments = Array.isArray(routeData?.segments) ? routeData.segments : [];
+
+    const normalizeNodeId = (value: unknown): string => {
+      if (value === null || value === undefined) {
+        return "";
+      }
+      return String(value).trim();
+    };
+
+    const normalizeShelfId = (value: unknown): string | null => {
+      if (value === null || value === undefined) {
+        return null;
+      }
+      const text = String(value).trim();
+      return text ? text : null;
+    };
+
+    for (const segment of segments) {
+      if (!segment || !Array.isArray(segment.path_edges)) {
+        continue;
+      }
+      for (const edge of segment.path_edges) {
+        if (!edge) {
+          continue;
+        }
+        const from = normalizeNodeId(edge.from);
+        const to = normalizeNodeId(edge.to);
+        if (!from || !to) {
+          continue;
+        }
+
+        const lengthRaw = edge.length;
+        const numericCandidate =
+          typeof lengthRaw === "number" && Number.isFinite(lengthRaw) ? lengthRaw : Number(lengthRaw);
+        const length = Number.isFinite(numericCandidate) && numericCandidate > 0 ? numericCandidate : 0;
+
+        const leftShelf = normalizeShelfId(edge.left_shelf);
+        const rightShelf = normalizeShelfId(edge.right_shelf);
+        const key = makeEdgeKey(from, to);
+        map.set(key, { from, to, length, leftShelf, rightShelf });
+      }
+    }
+
+    return map;
+  }, [routeData]);
+
   const nodeProductMap = useMemo(() => {
     // Group products by node so we can label map markers and list entries.
     const map = new Map<
@@ -373,8 +421,9 @@ function App() {
       routeItems,
       nodeProductMap,
       resolveNodeName: (nodeId) => getNodeLabelOverride(nodeId) ?? nodeId,
+      edgeAnnotations,
     });
-  }, [pathNodes, routeItems, nodeProductMap]);
+  }, [pathNodes, routeItems, nodeProductMap, edgeAnnotations]);
 
   const contentGridStyle = useMemo<CSSProperties | undefined>(() => {
     // Tie the map height to the measured canvas size for consistent layout.
