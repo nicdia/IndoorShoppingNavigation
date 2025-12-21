@@ -54,8 +54,40 @@ export function buildNavigationInstructions({
   routeItems.forEach((item, itemIndex) => {
     const targetIndex = findNextOccurrence(path, item.nodeId, cursorIndex);
     if (targetIndex === -1) {
-      const fallbackLabel = resolveNodeName(item.nodeId);
-      instructions.push(`${item.productName} is located at ${fallbackLabel}.`);
+      const anchorIndex = Math.min(cursorIndex, Math.max(path.length - 1, 0));
+      const anchorNode = path[anchorIndex];
+      if (!anchorNode) {
+        const fallbackLabel = resolveNodeName(item.nodeId);
+        instructions.push(`${item.productName} is located at ${fallbackLabel}.`);
+        return;
+      }
+
+      const previousNode = anchorIndex > 0 ? path[anchorIndex - 1] : undefined;
+      const nextNode = anchorIndex < path.length - 1 ? path[anchorIndex + 1] : undefined;
+
+      const productNarration = buildProductNarration({
+        item,
+        approachNode: anchorNode,
+        incomingNode: previousNode,
+        productNode: anchorNode,
+        outgoingNode: nextNode,
+        nodeProductMap,
+        productUsage,
+      });
+
+      const sentences: string[] = [];
+      if (itemIndex === 0 && startSentence) {
+        sentences.push(startSentence);
+      }
+      if (productNarration) {
+        sentences.push(productNarration);
+      } else {
+        const fallbackLabel = resolveNodeName(item.nodeId);
+        sentences.push(`${item.productName} is located at ${fallbackLabel}.`);
+      }
+      if (sentences.length > 0) {
+        instructions.push(sentences.join(" "));
+      }
       return;
     }
 
@@ -68,7 +100,7 @@ export function buildNavigationInstructions({
 
     const rawMovementEnd = hasProductBranch ? targetIndex : targetIndex + 1;
     const movementEnd = Math.min(Math.max(rawMovementEnd, cursorIndex + 1), path.length);
-    const movementPath = path.slice(cursorIndex, movementEnd);
+    const movementPath = targetIndex === cursorIndex ? [path[targetIndex]] : path.slice(cursorIndex, movementEnd);
     const movement = buildMovementSentences(
       movementPath,
       cursorIndex > 0 ? path[cursorIndex - 1] : undefined,
@@ -308,10 +340,10 @@ function determineProductSide({
 
   let sideVector: { x: number; y: number } | undefined;
 
-  if (approachNode) {
-    sideVector = vectorBetween(approachNode, productNode);
-  } else if (productPosition) {
+  if (productPosition) {
     sideVector = { x: productPosition.x - anchor.x, y: productPosition.y - anchor.y };
+  } else if (approachNode) {
+    sideVector = vectorBetween(approachNode, productNode);
   } else if (outgoingNode) {
     sideVector = vectorBetween(anchor, outgoingNode);
   }

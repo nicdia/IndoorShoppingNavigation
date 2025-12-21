@@ -284,17 +284,27 @@ function App() {
 
   const routeItems = useMemo(() => {
     // Flatten the ordered node list into checklist entries with readable labels.
-    const items: { productId: number; productName: string; nodeId: string; level?: number | null }[] = [];
+    const items: {
+      productId: number;
+      productName: string;
+      nodeId: string;
+      level?: number | null;
+      segmentIndex: number;
+    }[] = [];
+
     const orderedNodeIds =
       Array.isArray(routeData?.order) && routeData.order.length > 0
         ? routeData.order.map((nodeId) => String(nodeId).trim())
         : Array.from(nodeProductMap.keys());
 
-    for (const nodeId of orderedNodeIds) {
+    const segmentCount = Array.isArray(routeData?.segments) ? routeData.segments.length : 0;
+
+    orderedNodeIds.forEach((nodeId, routeIndex) => {
       const productsAtNode = nodeProductMap.get(nodeId);
       if (!productsAtNode) {
-        continue;
+        return;
       }
+      const segmentIndex = segmentCount > 0 ? Math.max(0, Math.min(routeIndex - 1, segmentCount - 1)) : 0;
       for (const product of productsAtNode) {
         const fallbackId = Number(nodeId);
         const numericId = product.productId ?? (Number.isFinite(fallbackId) ? fallbackId : items.length);
@@ -305,14 +315,14 @@ function App() {
           productName: overrideLabel ?? product.productName,
           nodeId,
           level: productLevelMap.get(resolvedId) ?? null,
+          segmentIndex,
         });
       }
-    }
+    });
 
     if (items.length > 0) {
       return items;
     }
-    
 
     return selectedProducts.map((id) => {
       const product = products.find((entry) => entry.id === id);
@@ -323,6 +333,7 @@ function App() {
         productName: overrideLabel ?? product?.name ?? "Unknown item",
         nodeId,
         level: product?.level ?? null,
+        segmentIndex: 0,
       };
     });
   }, [routeData, nodeProductMap, pathNodeIds, productLevelMap, products, selectedProducts]);
@@ -473,14 +484,30 @@ function App() {
   };
 
   const activeSegments = Array.isArray(routeData?.segments) ? routeData.segments : [];
-  const unclampedSegmentIndex =
+  const productSegmentIndices = useMemo(() => {
+    if (routeItems.length === 0) {
+      return [];
+    }
+    const maxSegmentIndex = Math.max(0, activeSegments.length - 1);
+    return routeItems.map((item, idx) => {
+      if (activeSegments.length === 0) {
+        return -1;
+      }
+      const candidate = typeof item.segmentIndex === "number" ? item.segmentIndex : idx;
+      return Math.max(0, Math.min(candidate, maxSegmentIndex));
+    });
+  }, [routeItems, activeSegments.length]);
+  const productSegmentIndex =
     routeItems.length === 0
       ? activeSegments.length - 1
       : activeIndex >= routeItems.length
       ? activeSegments.length - 1
-      : activeIndex;
+      : productSegmentIndices[activeIndex] ?? 0;
+
   const activeSegmentIndex =
-    activeSegments.length === 0 ? -1 : Math.max(0, Math.min(unclampedSegmentIndex, activeSegments.length - 1));
+    activeSegments.length === 0 || productSegmentIndex < 0
+      ? -1
+      : Math.max(0, Math.min(productSegmentIndex, activeSegments.length - 1));
 
   const entryNodeId = pathNodeIds[0] ?? routeItems[0]?.nodeId ?? null;
   const checkoutNodeId = pathNodeIds[pathNodeIds.length - 1] ?? routeItems[routeItems.length - 1]?.nodeId ?? entryNodeId;
