@@ -349,15 +349,21 @@ function App() {
 
     orderedNodeIds.forEach((nodeId, routeIndex) => {
       const productsAtNode = nodeProductMap.get(nodeId);
-      if (!productsAtNode) {
+      if (!productsAtNode || productsAtNode.length === 0) {
         return;
       }
-      const segmentIndex = segmentCount > 0 ? Math.max(0, Math.min(routeIndex - 1, segmentCount - 1)) : 0;
-      for (const product of productsAtNode) {
+
+      const previousSegment = segmentCount > 0 ? Math.max(0, Math.min(routeIndex - 1, segmentCount - 1)) : 0;
+      const nextSegment = segmentCount > 0 ? Math.max(0, Math.min(routeIndex, segmentCount - 1)) : previousSegment;
+
+      productsAtNode.forEach((product, productIndex) => {
         const fallbackId = Number(nodeId);
         const numericId = product.productId ?? (Number.isFinite(fallbackId) ? fallbackId : items.length);
         const resolvedId = Number.isFinite(numericId) ? Number(numericId) : items.length;
         const overrideLabel = getNodeLabelOverride(nodeId);
+        const isLastAtNode = productIndex === productsAtNode.length - 1;
+        const segmentIndex = productsAtNode.length > 1 && isLastAtNode ? nextSegment : previousSegment;
+
         items.push({
           productId: resolvedId,
           productName: overrideLabel ?? product.productName,
@@ -365,7 +371,7 @@ function App() {
           level: productLevelMap.get(resolvedId) ?? null,
           segmentIndex,
         });
-      }
+      });
     });
 
     if (items.length > 0) {

@@ -347,8 +347,32 @@ function buildStraightRunInstruction(edges: EdgeAnnotation[], fallbackDistance: 
   }
 
   const totalDistance = edges.reduce((sum, edge) => sum + Math.max(0, edge.length), 0);
-  const leftSummary = summarizeSide("left", edges);
-  const rightSummary = summarizeSide("right", edges);
+  const leftSummary = summarizeSide("left", edges, totalDistance);
+  const rightSummary = summarizeSide("right", edges, totalDistance);
+
+  if (isSymmetricAisle(leftSummary, rightSummary)) {
+    const shelfCount = Math.min(leftSummary.shelves.length, rightSummary.shelves.length);
+    const distanceMeters = totalDistance > 0 ? totalDistance : fallbackDistance;
+    if (shelfCount >= 2) {
+      const shelfList = formatShelfSequence(leftSummary.shelves.slice(0, shelfCount));
+      return `Pass ${shelfCount} shelves${shelfList ? ` (${shelfList})` : ""} over the next ${formatMeters(distanceMeters)} meters`;
+    }
+    if (shelfCount === 1) {
+      const shelfId = leftSummary.shelves[0] ?? rightSummary.shelves[0];
+      if (shelfId) {
+        return `Stay in the aisle along shelf ${shelfId} for ${formatMeters(distanceMeters)} meters`;
+      }
+      if (distanceMeters >= MIN_FALLBACK_DISTANCE_METERS) {
+        return `Stay in the aisle for ${formatMeters(distanceMeters)} meters`;
+      }
+      return null;
+    }
+    if (totalDistance >= MIN_FALLBACK_DISTANCE_METERS) {
+      return `Stay in the aisle for ${formatMeters(totalDistance)} meters`;
+    }
+    return null;
+  }
+
   const bestSummary = chooseSideSummary(leftSummary, rightSummary);
 
   if (!bestSummary) {
@@ -359,10 +383,7 @@ function buildStraightRunInstruction(edges: EdgeAnnotation[], fallbackDistance: 
     return null;
   }
 
-  const distanceAlongShelves = bestSummary.totalLength > 0 ? bestSummary.totalLength : totalDistance;
-  const coverageRatio = totalDistance > 0 ? bestSummary.totalLength / totalDistance : 0;
-
-  if (coverageRatio < SHELF_COVERAGE_THRESHOLD || distanceAlongShelves < MIN_SHELF_RUN_METERS) {
+  if (bestSummary.coverage < SHELF_COVERAGE_THRESHOLD || bestSummary.totalLength < MIN_SHELF_RUN_METERS) {
     const effective = totalDistance > 0 ? totalDistance : fallbackDistance;
     if (effective >= MIN_FALLBACK_DISTANCE_METERS) {
       return buildStraightInstruction(effective);
@@ -372,15 +393,14 @@ function buildStraightRunInstruction(edges: EdgeAnnotation[], fallbackDistance: 
 
   if (bestSummary.shelves.length === 1) {
     const shelf = bestSummary.shelves[0];
-    if (distanceAlongShelves >= MIN_SHELF_RUN_METERS) {
-      return `Follow shelf ${shelf} on your ${bestSummary.side} for ${formatMeters(distanceAlongShelves)} meters`;
-    }
-    return `Stay along shelf ${shelf} on your ${bestSummary.side}`;
+    const shelfDistance = bestSummary.totalLength > 0 ? bestSummary.totalLength : totalDistance;
+    return `Follow shelf ${shelf} on your ${bestSummary.side} for ${formatMeters(shelfDistance)} meters`;
   }
 
   const shelfCount = bestSummary.shelves.length;
   const shelfList = formatShelfSequence(bestSummary.shelves);
-  return `Pass ${shelfCount} shelves on your ${bestSummary.side}${shelfList ? ` (${shelfList})` : ""}`;
+  const shelfDistance = bestSummary.totalLength > 0 ? bestSummary.totalLength : totalDistance;
+  return `Pass ${shelfCount} shelves on your ${bestSummary.side}${shelfList ? ` (${shelfList})` : ""} over the next ${formatMeters(shelfDistance)} meters`;
 }
 
 type SideSummary = {
@@ -388,9 +408,10 @@ type SideSummary = {
   shelves: string[];
   totalLength: number;
   edgeCount: number;
+  coverage: number;
 };
 
-function summarizeSide(side: "left" | "right", edges: EdgeAnnotation[]): SideSummary {
+function summarizeSide(side: "left" | "right", edges: EdgeAnnotation[], totalDistance: number): SideSummary {
   const shelves: string[] = [];
   const seenShelves = new Set<string>();
   let totalLength = 0;
@@ -409,7 +430,8 @@ function summarizeSide(side: "left" | "right", edges: EdgeAnnotation[]): SideSum
     }
   }
 
-  return { side, shelves, totalLength, edgeCount };
+  const coverage = totalDistance > 0 ? totalLength / totalDistance : 0;
+  return { side, shelves, totalLength, edgeCount, coverage };
 }
 
 function chooseSideSummary(left: SideSummary, right: SideSummary): SideSummary | null {
@@ -429,6 +451,25 @@ function chooseSideSummary(left: SideSummary, right: SideSummary): SideSummary |
   });
 
   return candidates[0];
+}
+
+function isSymmetricAisle(left: SideSummary, right: SideSummary): boolean {
+  if (left.edgeCount === 0 || right.edgeCount === 0) {
+    return false;
+  }
+  if (left.coverage < SHELF_COVERAGE_THRESHOLD || right.coverage < SHELF_COVERAGE_THRESHOLD) {
+    return false;
+  }
+  const minLength = Math.min(left.totalLength, right.totalLength);
+  const maxLength = Math.max(left.totalLength, right.totalLength);
+  if (maxLength === 0 || minLength / maxLength < 0.8) {
+    return false;
+  }
+  const shelfCountDiff = Math.abs(left.shelves.length - right.shelves.length);
+  if (shelfCountDiff > 1) {
+    return false;
+  }
+  return true;
 }
 
 function formatShelfSequence(ids: string[]): string {
