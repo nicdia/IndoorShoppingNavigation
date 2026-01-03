@@ -3,13 +3,17 @@ from flask_cors import CORS
 import os
 from datetime import datetime
 from dotenv import load_dotenv
-
-from routes.route import route_bp      # ← dein echtes File
+from routes.route import route_bp
 from db.db import close_conn, get_conn
+from pathlib import Path
 
 load_dotenv()
-DB_PATH = os.environ.get("DB_PATH", "app.db")
-print("📁 Verwende Datenbank:", os.path.abspath(DB_PATH))
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]  # .../<repo-root>/
+DEFAULT_DB_PATH = PROJECT_ROOT / "indoor_shopping_nav.db"
+DB_PATH = os.environ.get("DB_PATH", str(DEFAULT_DB_PATH))
+
+print("📁 Verwende Datenbank:", Path(DB_PATH).expanduser().resolve())
 
 app = Flask(__name__)
 # ✅ CORS: erlaube Requests vom Frontend-Port 8000
