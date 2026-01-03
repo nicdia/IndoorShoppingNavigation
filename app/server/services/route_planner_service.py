@@ -1,16 +1,90 @@
 # services/route_planner_service.py
 from typing import List, Dict, Any, Optional, Tuple
+import csv
 import math
 import os
+from pathlib import Path
 import networkx as nx
 from math import hypot
 from db.db import fetch_edges, fetch_product_nodes_by_names, fetch_node_coordinates_by_ids
 
 _GRAPH: Optional[nx.DiGraph] = None
+_SHELF_SEGMENTS: Optional[Dict[Tuple[str, str], Dict[str, Optional[str]]]] = None
 
 ENTRY_NODE_ID = os.environ.get("ENTRY_NODE_ID", "21").strip() or None
 _CHECKOUT_RAW = os.environ.get("CHECKOUT_NODE_IDS", "14,15")
 CHECKOUT_NODE_IDS = [n.strip() for n in _CHECKOUT_RAW.split(",") if n.strip()]
+
+
+def _resolve_project_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+def _resolve_shelf_segments_path() -> Path:
+    override = os.environ.get("SHELF_SEGMENTS_PATH")
+    if override:
+        return Path(override)
+    return _resolve_project_root() / "resources" / "shelf_segments.csv"
+
+
+def _sanitize_shelf_id(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _load_shelf_segments() -> Dict[Tuple[str, str], Dict[str, Optional[str]]]:
+    global _SHELF_SEGMENTS
+    if _SHELF_SEGMENTS is not None:
+        return _SHELF_SEGMENTS
+
+    mapping: Dict[Tuple[str, str], Dict[str, Optional[str]]] = {}
+    path = _resolve_shelf_segments_path()
+
+    try:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle)
+            for row in reader:
+                if not row:
+                    continue
+                source_raw = row.get("node_source")
+                target_raw = row.get("node_target")
+                source = str(source_raw).strip() if source_raw is not None else ""
+                target = str(target_raw).strip() if target_raw is not None else ""
+                if not source or not target:
+                    continue
+                left = _sanitize_shelf_id(row.get("left_shelf"))
+                right = _sanitize_shelf_id(row.get("right_shelf"))
+                mapping[(source, target)] = {"left": left, "right": right}
+    except FileNotFoundError:
+        print(f"[route_planner] shelf segment file not found at {path}. Continuing without shelf metadata.")
+    except Exception as exc:
+        print(f"[route_planner] failed to load shelf segments: {exc}")
+
+    _SHELF_SEGMENTS = mapping
+    return mapping
+
+
+def _resolve_edge_shelves(
+    source: str,
+    target: str,
+    shelf_segments: Dict[Tuple[str, str], Dict[str, Optional[str]]],
+) -> Dict[str, Optional[str]]:
+    if not shelf_segments:
+        return {"left": None, "right": None}
+
+    key = (source, target)
+    if key in shelf_segments:
+        entry = shelf_segments[key]
+        return {"left": entry.get("left"), "right": entry.get("right")}
+
+    reverse = (target, source)
+    if reverse in shelf_segments:
+        entry = shelf_segments[reverse]
+        return {"left": entry.get("right"), "right": entry.get("left")}
+
+    return {"left": None, "right": None}
 
 
 def get_graph() -> nx.DiGraph:
@@ -39,8 +113,8 @@ def _euclid(a: Dict[str, Any], b: Dict[str, Any]) -> float:
                  float(a["node_y"]) - float(b["node_y"]))
 
 
-def plan_route_by_names(product_names: List[str]) -> Dict[str, Any]:
-    """Plane eine Route, die immer beim Eingang startet und an einer Kasse endet."""
+def plan_route_by_names(product_names: List[str], start_node_id: Optional[str] = None) -> Dict[str, Any]:
+    """Plane eine Route, die beim gewählten Startknoten beginnt und an einer Kasse endet."""
     rows = fetch_product_nodes_by_names(product_names)
     products: List[Dict[str, Any]] = []
     for r in rows:
@@ -55,7 +129,13 @@ def plan_route_by_names(product_names: List[str]) -> Dict[str, Any]:
     # Map: node_id -> Produkt / Knoten Infos
     node_info: Dict[str, Dict[str, Any]] = {p["node_id"]: dict(p) for p in products}
 
-    entry_node = ENTRY_NODE_ID
+    entry_override = None
+    if start_node_id is not None:
+        entry_override = str(start_node_id).strip()
+        if entry_override == "":
+            entry_override = None
+
+    entry_node = entry_override or ENTRY_NODE_ID
     checkout_nodes = CHECKOUT_NODE_IDS[:]
 
     extra_nodes = [n for n in [entry_node, *checkout_nodes] if n and n not in node_info]
@@ -130,6 +210,8 @@ def plan_route_by_names(product_names: List[str]) -> Dict[str, Any]:
     if missing:
         coordinate_sources.update(fetch_node_coordinates_by_ids(missing))
 
+    shelf_segments = _load_shelf_segments()
+
     segments_with_coords: List[Dict[str, Any]] = []
     for segment in segments:
         # Ensure segment['path'] is a list of all node ids along the edge-following path
@@ -146,9 +228,40 @@ def plan_route_by_names(product_names: List[str]) -> Dict[str, Any]:
                 path_coordinates.append({"node_id": str(node_id), "x": coords["x"], "y": coords["y"]})
             else:
                 path_coordinates.append({"node_id": str(node_id), "x": 0.0, "y": 0.0})
+
+        edge_annotations: List[Dict[str, Any]] = []
+        for source, target in zip(path_ids, path_ids[1:]):
+            source_id = str(source)
+            target_id = str(target)
+
+            if G.has_edge(source_id, target_id):
+                edge_length = float(G[source_id][target_id].get("weight", 0.0) or 0.0)
+            else:
+                coords_a = coordinate_sources.get(source_id)
+                coords_b = coordinate_sources.get(target_id)
+                if coords_a and coords_b:
+                    edge_length = hypot(coords_b["x"] - coords_a["x"], coords_b["y"] - coords_a["y"])
+                else:
+                    base = node_info.get(source_id)
+                    dest = node_info.get(target_id)
+                    if base and dest:
+                        edge_length = _euclid(base, dest)
+                    else:
+                        edge_length = 0.0
+
+            shelf_info = _resolve_edge_shelves(source_id, target_id, shelf_segments)
+            edge_annotations.append({
+                "from": source_id,
+                "to": target_id,
+                "length": edge_length,
+                "left_shelf": shelf_info.get("left"),
+                "right_shelf": shelf_info.get("right"),
+            })
+
         enriched_segment = dict(segment)
         enriched_segment["path"] = path_ids
         enriched_segment["path_coordinates"] = path_coordinates
+        enriched_segment["path_edges"] = edge_annotations
         segments_with_coords.append(enriched_segment)
 
     seen_waypoints = set()

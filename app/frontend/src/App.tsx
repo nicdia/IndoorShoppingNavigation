@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { ProductList } from "./components/ProductList";
+import { StartLocationSelector } from "./components/StartLocationSelector";
 import { MapPreview } from "./components/MapPreview";
 import { SelectedChecklist } from "./components/SelectedChecklist";
 import { RouteSummary } from "./components/RouteSummary";
 import { Product, RouteData, RouteNode, StorePolygon } from "./types/route";
 import { NODE_COORDINATES } from "./data/nodeCoordinates";
-import { buildNavigationInstructions } from "./utils/navigationText";
+import { buildNavigationInstructions, EdgeAnnotationLookup, makeEdgeKey } from "./utils/navigationText";
 
 // Central application component driving product selection and route execution.
 
@@ -17,6 +18,8 @@ const NODE_LABEL_OVERRIDES: Record<string, string> = {
   "14": "Checkout",
   "15": "Checkout",
 };
+
+const DEFAULT_ENTRY_NODE_ID = "21";
 
 const getNodeLabelOverride = (nodeId: string | number | null | undefined) => {
   if (nodeId === null || nodeId === undefined) {
@@ -48,13 +51,14 @@ function App() {
   const [productsError, setProductsError] = useState<string | null>(null);
 
   const [selectedProducts, setSelectedProducts] = useState<number[]>([]);
+  const [startNodeId, setStartNodeId] = useState<string>(DEFAULT_ENTRY_NODE_ID);
   const [routeData, setRouteData] = useState<RouteData | null>(null);
   const [isLoadingRoute, setIsLoadingRoute] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [completed, setCompleted] = useState<boolean[]>([]);
-  const [view, setView] = useState<"select" | "route">("select");
+    const [view, setView] = useState<"start" | "select" | "route">("start");
   const [layoutPolygons, setLayoutPolygons] = useState<StorePolygon[] | null>(null);
   const [mapPanelSize, setMapPanelSize] = useState<{ width: number; height: number } | null>(null);
 
@@ -131,6 +135,29 @@ function App() {
     const messages = [productsError, routeError].filter((value): value is string => Boolean(value));
     return messages.length > 0 ? messages.join(". ") : null;
   }, [productsError, routeError]);
+
+  const startOptions = useMemo(() => {
+    const entranceLabel = getNodeLabelOverride(DEFAULT_ENTRY_NODE_ID) ?? "Entrance";
+
+    const nodeLabelMap = new Map<string, string>();
+    products.forEach((product) => {
+      if (product.nodeId === null || product.nodeId === undefined) {
+        return;
+      }
+      const nodeValue = String(product.nodeId).trim();
+      if (!nodeValue || nodeLabelMap.has(nodeValue)) {
+        return;
+      }
+      const label = product.name?.trim() || `Product ${nodeValue}`;
+      nodeLabelMap.set(nodeValue, label);
+    });
+
+    const productOptions = Array.from(nodeLabelMap.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+
+    return [{ value: DEFAULT_ENTRY_NODE_ID, label: entranceLabel }, ...productOptions];
+  }, [products]);
 
   const coordinateLookup = useMemo(() => {
     // Build a lookup table for node coordinates with service data taking priority.
@@ -213,6 +240,54 @@ function App() {
     });
   }, [coordinateLookup, pathNodeIds]);
 
+  const edgeAnnotations = useMemo<EdgeAnnotationLookup>(() => {
+    const map: EdgeAnnotationLookup = new Map();
+    const segments = Array.isArray(routeData?.segments) ? routeData.segments : [];
+
+    const normalizeNodeId = (value: unknown): string => {
+      if (value === null || value === undefined) {
+        return "";
+      }
+      return String(value).trim();
+    };
+
+    const normalizeShelfId = (value: unknown): string | null => {
+      if (value === null || value === undefined) {
+        return null;
+      }
+      const text = String(value).trim();
+      return text ? text : null;
+    };
+
+    for (const segment of segments) {
+      if (!segment || !Array.isArray(segment.path_edges)) {
+        continue;
+      }
+      for (const edge of segment.path_edges) {
+        if (!edge) {
+          continue;
+        }
+        const from = normalizeNodeId(edge.from);
+        const to = normalizeNodeId(edge.to);
+        if (!from || !to) {
+          continue;
+        }
+
+        const lengthRaw = edge.length;
+        const numericCandidate =
+          typeof lengthRaw === "number" && Number.isFinite(lengthRaw) ? lengthRaw : Number(lengthRaw);
+        const length = Number.isFinite(numericCandidate) && numericCandidate > 0 ? numericCandidate : 0;
+
+        const leftShelf = normalizeShelfId(edge.left_shelf);
+        const rightShelf = normalizeShelfId(edge.right_shelf);
+        const key = makeEdgeKey(from, to);
+        map.set(key, { from, to, length, leftShelf, rightShelf });
+      }
+    }
+
+    return map;
+  }, [routeData]);
+
   const nodeProductMap = useMemo(() => {
     // Group products by node so we can label map markers and list entries.
     const map = new Map<
@@ -257,35 +332,51 @@ function App() {
 
   const routeItems = useMemo(() => {
     // Flatten the ordered node list into checklist entries with readable labels.
-    const items: { productId: number; productName: string; nodeId: string; level?: number | null }[] = [];
+    const items: {
+      productId: number;
+      productName: string;
+      nodeId: string;
+      level?: number | null;
+      segmentIndex: number;
+    }[] = [];
+
     const orderedNodeIds =
       Array.isArray(routeData?.order) && routeData.order.length > 0
         ? routeData.order.map((nodeId) => String(nodeId).trim())
         : Array.from(nodeProductMap.keys());
 
-    for (const nodeId of orderedNodeIds) {
+    const segmentCount = Array.isArray(routeData?.segments) ? routeData.segments.length : 0;
+
+    orderedNodeIds.forEach((nodeId, routeIndex) => {
       const productsAtNode = nodeProductMap.get(nodeId);
-      if (!productsAtNode) {
-        continue;
+      if (!productsAtNode || productsAtNode.length === 0) {
+        return;
       }
-      for (const product of productsAtNode) {
+
+      const previousSegment = segmentCount > 0 ? Math.max(0, Math.min(routeIndex - 1, segmentCount - 1)) : 0;
+      const nextSegment = segmentCount > 0 ? Math.max(0, Math.min(routeIndex, segmentCount - 1)) : previousSegment;
+
+      productsAtNode.forEach((product, productIndex) => {
         const fallbackId = Number(nodeId);
         const numericId = product.productId ?? (Number.isFinite(fallbackId) ? fallbackId : items.length);
         const resolvedId = Number.isFinite(numericId) ? Number(numericId) : items.length;
         const overrideLabel = getNodeLabelOverride(nodeId);
+        const isLastAtNode = productIndex === productsAtNode.length - 1;
+        const segmentIndex = productsAtNode.length > 1 && isLastAtNode ? nextSegment : previousSegment;
+
         items.push({
           productId: resolvedId,
           productName: overrideLabel ?? product.productName,
           nodeId,
           level: productLevelMap.get(resolvedId) ?? null,
+          segmentIndex,
         });
-      }
-    }
+      });
+    });
 
     if (items.length > 0) {
       return items;
     }
-    
 
     return selectedProducts.map((id) => {
       const product = products.find((entry) => entry.id === id);
@@ -296,6 +387,7 @@ function App() {
         productName: overrideLabel ?? product?.name ?? "Unknown item",
         nodeId,
         level: product?.level ?? null,
+        segmentIndex: 0,
       };
     });
   }, [routeData, nodeProductMap, pathNodeIds, productLevelMap, products, selectedProducts]);
@@ -335,8 +427,9 @@ function App() {
       routeItems,
       nodeProductMap,
       resolveNodeName: (nodeId) => getNodeLabelOverride(nodeId) ?? nodeId,
+      edgeAnnotations,
     });
-  }, [pathNodes, routeItems, nodeProductMap]);
+  }, [pathNodes, routeItems, nodeProductMap, edgeAnnotations]);
 
   const contentGridStyle = useMemo<CSSProperties | undefined>(() => {
     // Tie the map height to the measured canvas size for consistent layout.
@@ -405,10 +498,16 @@ function App() {
     setRouteError(null);
     setIsLoadingRoute(true);
     try {
+      const requestPayload: Record<string, unknown> = {
+        productCodes: selectedProducts,
+      };
+      if (startNodeId) {
+        requestPayload.startNodeId = startNodeId;
+      }
       const response = await fetch(`${API_BASE_URL}/route`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productCodes: selectedProducts }),
+        body: JSON.stringify(requestPayload),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -440,14 +539,30 @@ function App() {
   };
 
   const activeSegments = Array.isArray(routeData?.segments) ? routeData.segments : [];
-  const unclampedSegmentIndex =
+  const productSegmentIndices = useMemo(() => {
+    if (routeItems.length === 0) {
+      return [];
+    }
+    const maxSegmentIndex = Math.max(0, activeSegments.length - 1);
+    return routeItems.map((item, idx) => {
+      if (activeSegments.length === 0) {
+        return -1;
+      }
+      const candidate = typeof item.segmentIndex === "number" ? item.segmentIndex : idx;
+      return Math.max(0, Math.min(candidate, maxSegmentIndex));
+    });
+  }, [routeItems, activeSegments.length]);
+  const productSegmentIndex =
     routeItems.length === 0
       ? activeSegments.length - 1
       : activeIndex >= routeItems.length
       ? activeSegments.length - 1
-      : activeIndex;
+      : productSegmentIndices[activeIndex] ?? 0;
+
   const activeSegmentIndex =
-    activeSegments.length === 0 ? -1 : Math.max(0, Math.min(unclampedSegmentIndex, activeSegments.length - 1));
+    activeSegments.length === 0 || productSegmentIndex < 0
+      ? -1
+      : Math.max(0, Math.min(productSegmentIndex, activeSegments.length - 1));
 
   const entryNodeId = pathNodeIds[0] ?? routeItems[0]?.nodeId ?? null;
   const checkoutNodeId = pathNodeIds[pathNodeIds.length - 1] ?? routeItems[routeItems.length - 1]?.nodeId ?? entryNodeId;
@@ -544,6 +659,16 @@ function App() {
     <div className="app-shell">
       <header className="app-page-header">
         <h1>Grocery Store Navigation</h1>
+        {view === "select" && (
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => setView("start")}
+            disabled={isLoadingRoute || productsLoading}
+          >
+            Change start
+          </button>
+        )}
         {view === "route" && (
           <button type="button" className="secondary-button" onClick={handleEditSelection}>
             Edit selection
@@ -551,6 +676,18 @@ function App() {
         )}
       </header>
       <main className="app-main">
+        {view === "start" && (
+          <StartLocationSelector
+            options={startOptions}
+            selectedValue={startNodeId}
+            onSelect={setStartNodeId}
+            onConfirm={() => setView("select")}
+            confirmLabel="Select products"
+            isConfirmDisabled={productsLoading}
+            errorMessage={productsError}
+          />
+        )}
+
         {view === "select" && (
           <ProductList
             products={products}

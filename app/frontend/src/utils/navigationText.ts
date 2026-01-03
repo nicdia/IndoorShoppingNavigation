@@ -1,5 +1,21 @@
 import { RouteNode } from "../types/route";
 
+export type EdgeAnnotation = {
+  from: string;
+  to: string;
+  length: number;
+  leftShelf: string | null;
+  rightShelf: string | null;
+};
+
+export type EdgeAnnotationLookup = Map<string, EdgeAnnotation>;
+
+const EDGE_KEY_SEPARATOR = "->";
+
+export function makeEdgeKey(from: string, to: string) {
+  return `${from}${EDGE_KEY_SEPARATOR}${to}`;
+}
+
 type ProductStop = {
   productId: number;
   productName: string;
@@ -18,12 +34,14 @@ type NavigationOptions = {
   routeItems: ProductStop[];
   nodeProductMap: Map<string, NodeProductEntry[]>;
   resolveNodeName: (nodeId: string) => string;
+  edgeAnnotations?: EdgeAnnotationLookup;
 };
 
 type TurnDirection = "left" | "right" | "back" | "straight";
 type MovementResult = {
   sentences: string[];
   trailingDistance: number;
+  trailingEdges: EdgeAnnotation[];
   lastHeading?: { x: number; y: number };
 };
 
@@ -32,12 +50,16 @@ const MIN_SEGMENT_LENGTH = 0.05;
 const STRAIGHT_ANGLE_THRESHOLD = (20 * Math.PI) / 180;
 const UTURN_ANGLE_THRESHOLD = (150 * Math.PI) / 180;
 const PRODUCT_BRANCH_THRESHOLD = 1.5;
+const MIN_SHELF_RUN_METERS = 0.5;
+const MIN_FALLBACK_DISTANCE_METERS = 2;
+const SHELF_COVERAGE_THRESHOLD = 0.75;
 
 export function buildNavigationInstructions({
   path,
   routeItems,
   nodeProductMap,
   resolveNodeName,
+  edgeAnnotations,
 }: NavigationOptions): string[] {
   if (path.length === 0 || routeItems.length === 0) {
     return [];
@@ -47,6 +69,7 @@ export function buildNavigationInstructions({
   const productUsage = new Map<string, number>();
   let cursorIndex = 0;
   let lastHeading: { x: number; y: number } | undefined;
+  const edgeLookup: EdgeAnnotationLookup = edgeAnnotations ?? new Map<string, EdgeAnnotation>();
 
   const startLabel = resolveNodeName(path[0].nodeId);
   const startSentence = startLabel && startLabel !== path[0].nodeId ? `Start at ${startLabel}.` : null;
@@ -54,8 +77,40 @@ export function buildNavigationInstructions({
   routeItems.forEach((item, itemIndex) => {
     const targetIndex = findNextOccurrence(path, item.nodeId, cursorIndex);
     if (targetIndex === -1) {
-      const fallbackLabel = resolveNodeName(item.nodeId);
-      instructions.push(`${item.productName} is located at ${fallbackLabel}.`);
+      const anchorIndex = Math.min(cursorIndex, Math.max(path.length - 1, 0));
+      const anchorNode = path[anchorIndex];
+      if (!anchorNode) {
+        const fallbackLabel = resolveNodeName(item.nodeId);
+        instructions.push(`${item.productName} is located at ${fallbackLabel}.`);
+        return;
+      }
+
+      const previousNode = anchorIndex > 0 ? path[anchorIndex - 1] : undefined;
+      const nextNode = anchorIndex < path.length - 1 ? path[anchorIndex + 1] : undefined;
+
+      const productNarration = buildProductNarration({
+        item,
+        approachNode: anchorNode,
+        incomingNode: previousNode,
+        productNode: anchorNode,
+        outgoingNode: nextNode,
+        nodeProductMap,
+        productUsage,
+      });
+
+      const sentences: string[] = [];
+      if (itemIndex === 0 && startSentence) {
+        sentences.push(startSentence);
+      }
+      if (productNarration) {
+        sentences.push(productNarration);
+      } else {
+        const fallbackLabel = resolveNodeName(item.nodeId);
+        sentences.push(`${item.productName} is located at ${fallbackLabel}.`);
+      }
+      if (sentences.length > 0) {
+        instructions.push(sentences.join(" "));
+      }
       return;
     }
 
@@ -68,11 +123,12 @@ export function buildNavigationInstructions({
 
     const rawMovementEnd = hasProductBranch ? targetIndex : targetIndex + 1;
     const movementEnd = Math.min(Math.max(rawMovementEnd, cursorIndex + 1), path.length);
-    const movementPath = path.slice(cursorIndex, movementEnd);
+    const movementPath = targetIndex === cursorIndex ? [path[targetIndex]] : path.slice(cursorIndex, movementEnd);
     const movement = buildMovementSentences(
       movementPath,
       cursorIndex > 0 ? path[cursorIndex - 1] : undefined,
-      lastHeading
+      lastHeading,
+      edgeLookup
     );
 
     const incomingNode =
@@ -111,8 +167,9 @@ export function buildNavigationInstructions({
     }
 
     sentences.push(...movement.sentences);
-    if (movement.trailingDistance >= 2) {
-      sentences.push(`${buildStraightInstruction(movement.trailingDistance)}.`);
+    const trailingInstruction = buildStraightRunInstruction(movement.trailingEdges, movement.trailingDistance);
+    if (trailingInstruction) {
+      sentences.push(`${trailingInstruction}.`);
     }
     if (productNarration) {
       sentences.push(productNarration);
@@ -128,12 +185,13 @@ export function buildNavigationInstructions({
   if (cursorIndex <= path.length - 1) {
     const remainingPath = path.slice(cursorIndex, path.length);
     const previousNode = cursorIndex > 0 ? path[cursorIndex - 1] : undefined;
-    const finalMovement = buildMovementSentences(remainingPath, previousNode, lastHeading);
+    const finalMovement = buildMovementSentences(remainingPath, previousNode, lastHeading, edgeLookup);
 
     const finalSentences: string[] = [];
     finalSentences.push(...finalMovement.sentences);
-    if (finalMovement.trailingDistance >= 2) {
-      finalSentences.push(`${buildStraightInstruction(finalMovement.trailingDistance)}.`);
+    const finalInstruction = buildStraightRunInstruction(finalMovement.trailingEdges, finalMovement.trailingDistance);
+    if (finalInstruction) {
+      finalSentences.push(`${finalInstruction}.`);
     }
 
     const destinationNode = path[path.length - 1];
@@ -210,13 +268,15 @@ function findMatchingProductCandidate({
 function buildMovementSentences(
   segmentPath: RouteNode[],
   previousNode?: RouteNode,
-  initialHeading?: { x: number; y: number }
-) : MovementResult {
+  initialHeading?: { x: number; y: number },
+  edgeLookup?: EdgeAnnotationLookup
+): MovementResult {
   if (segmentPath.length <= 1) {
-    return { sentences: [], trailingDistance: 0, lastHeading: initialHeading };
+    return { sentences: [], trailingDistance: 0, trailingEdges: [], lastHeading: initialHeading };
   }
 
   const sentences: string[] = [];
+  const runEdges: EdgeAnnotation[] = [];
   let accumulatedDistance = 0;
   let lastHeading =
     initialHeading ?? (previousNode && segmentPath.length > 0 ? vectorBetween(previousNode, segmentPath[0]) : undefined);
@@ -234,29 +294,198 @@ function buildMovementSentences(
     if (lastHeading && heading) {
       const turn = classifyTurnFromVectors(lastHeading, heading);
       if (turn !== "straight") {
-        if (accumulatedDistance > 0) {
-          const straightText = buildStraightInstruction(accumulatedDistance);
-          const turnText = buildTurnInstruction(turn);
-          sentences.push(`${straightText}, then ${turnText}.`);
-          accumulatedDistance = 0;
+        const runInstruction = buildStraightRunInstruction(runEdges, accumulatedDistance);
+        const turnText = buildTurnInstruction(turn);
+        if (runInstruction) {
+          sentences.push(`${runInstruction}, then ${turnText}.`);
         } else {
-          sentences.push(`${capitalizeFirst(buildTurnInstruction(turn))}.`);
+          sentences.push(`${capitalizeFirst(turnText)}.`);
         }
+        accumulatedDistance = 0;
+        runEdges.length = 0;
       }
     }
 
-    accumulatedDistance += segmentDistance;
+    const annotation = resolveEdgeAnnotation(previous.nodeId, current.nodeId, segmentDistance, edgeLookup);
+    runEdges.push(annotation);
+    accumulatedDistance += annotation.length;
     lastHeading = heading ?? lastHeading;
+  }
 
-    const isLastSegment = index === segmentPath.length - 1;
+  return { sentences, trailingDistance: accumulatedDistance, trailingEdges: runEdges.slice(), lastHeading };
+}
 
-    if (!isLastSegment) {
-      // continue to evaluate upcoming turn with updated heading
-      continue;
+function resolveEdgeAnnotation(
+  fromNodeId: string,
+  toNodeId: string,
+  fallbackDistance: number,
+  edgeLookup?: EdgeAnnotationLookup
+): EdgeAnnotation {
+  const key = makeEdgeKey(fromNodeId, toNodeId);
+  const entry = edgeLookup?.get(key);
+  const candidateLength = entry?.length;
+  const numericLength = typeof candidateLength === "number" && Number.isFinite(candidateLength)
+    ? candidateLength
+    : Number(candidateLength);
+  const length = Number.isFinite(numericLength) && numericLength > 0 ? numericLength : Math.max(fallbackDistance, 0);
+
+  return {
+    from: fromNodeId,
+    to: toNodeId,
+    length,
+    leftShelf: entry?.leftShelf ?? null,
+    rightShelf: entry?.rightShelf ?? null,
+  };
+}
+
+function buildStraightRunInstruction(edges: EdgeAnnotation[], fallbackDistance: number): string | null {
+  if (edges.length === 0) {
+    if (fallbackDistance >= MIN_FALLBACK_DISTANCE_METERS) {
+      return buildStraightInstruction(fallbackDistance);
+    }
+    return null;
+  }
+
+  const totalDistance = edges.reduce((sum, edge) => sum + Math.max(0, edge.length), 0);
+  const leftSummary = summarizeSide("left", edges, totalDistance);
+  const rightSummary = summarizeSide("right", edges, totalDistance);
+
+  if (isSymmetricAisle(leftSummary, rightSummary)) {
+    const shelfCount = Math.min(leftSummary.shelves.length, rightSummary.shelves.length);
+    const distanceMeters = totalDistance > 0 ? totalDistance : fallbackDistance;
+    if (shelfCount >= 2) {
+      const shelfList = formatShelfSequence(leftSummary.shelves.slice(0, shelfCount));
+      return `Pass ${shelfCount} shelves${shelfList ? ` (${shelfList})` : ""} over the next ${formatMeters(distanceMeters)} meters`;
+    }
+    if (shelfCount === 1) {
+      const shelfId = leftSummary.shelves[0] ?? rightSummary.shelves[0];
+      if (shelfId) {
+        return `Stay in the aisle along shelf ${shelfId} for ${formatMeters(distanceMeters)} meters`;
+      }
+      if (distanceMeters >= MIN_FALLBACK_DISTANCE_METERS) {
+        return `Stay in the aisle for ${formatMeters(distanceMeters)} meters`;
+      }
+      return null;
+    }
+    if (totalDistance >= MIN_FALLBACK_DISTANCE_METERS) {
+      return `Stay in the aisle for ${formatMeters(totalDistance)} meters`;
+    }
+    return null;
+  }
+
+  const bestSummary = chooseSideSummary(leftSummary, rightSummary);
+
+  if (!bestSummary) {
+    const effective = totalDistance > 0 ? totalDistance : fallbackDistance;
+    if (effective >= MIN_FALLBACK_DISTANCE_METERS) {
+      return buildStraightInstruction(effective);
+    }
+    return null;
+  }
+
+  if (bestSummary.coverage < SHELF_COVERAGE_THRESHOLD || bestSummary.totalLength < MIN_SHELF_RUN_METERS) {
+    const effective = totalDistance > 0 ? totalDistance : fallbackDistance;
+    if (effective >= MIN_FALLBACK_DISTANCE_METERS) {
+      return buildStraightInstruction(effective);
+    }
+    return null;
+  }
+
+  if (bestSummary.shelves.length === 1) {
+    const shelf = bestSummary.shelves[0];
+    const shelfDistance = bestSummary.totalLength > 0 ? bestSummary.totalLength : totalDistance;
+    return `Follow shelf ${shelf} on your ${bestSummary.side} for ${formatMeters(shelfDistance)} meters`;
+  }
+
+  const shelfCount = bestSummary.shelves.length;
+  const shelfList = formatShelfSequence(bestSummary.shelves);
+  const shelfDistance = bestSummary.totalLength > 0 ? bestSummary.totalLength : totalDistance;
+  return `Pass ${shelfCount} shelves on your ${bestSummary.side}${shelfList ? ` (${shelfList})` : ""} over the next ${formatMeters(shelfDistance)} meters`;
+}
+
+type SideSummary = {
+  side: "left" | "right";
+  shelves: string[];
+  totalLength: number;
+  edgeCount: number;
+  coverage: number;
+};
+
+function summarizeSide(side: "left" | "right", edges: EdgeAnnotation[], totalDistance: number): SideSummary {
+  const shelves: string[] = [];
+  const seenShelves = new Set<string>();
+  let totalLength = 0;
+  let edgeCount = 0;
+
+  for (const edge of edges) {
+    const shelfId = side === "left" ? edge.leftShelf : edge.rightShelf;
+    const length = Math.max(0, edge.length);
+    if (shelfId) {
+      edgeCount += 1;
+      totalLength += length;
+      if (!seenShelves.has(shelfId)) {
+        shelves.push(shelfId);
+        seenShelves.add(shelfId);
+      }
     }
   }
 
-  return { sentences, trailingDistance: accumulatedDistance, lastHeading };
+  const coverage = totalDistance > 0 ? totalLength / totalDistance : 0;
+  return { side, shelves, totalLength, edgeCount, coverage };
+}
+
+function chooseSideSummary(left: SideSummary, right: SideSummary): SideSummary | null {
+  const candidates = [left, right].filter((entry) => entry.edgeCount > 0 && entry.totalLength > 0);
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  candidates.sort((a, b) => {
+    if (b.totalLength !== a.totalLength) {
+      return b.totalLength - a.totalLength;
+    }
+    if (b.edgeCount !== a.edgeCount) {
+      return b.edgeCount - a.edgeCount;
+    }
+    return a.shelves.length - b.shelves.length;
+  });
+
+  return candidates[0];
+}
+
+function isSymmetricAisle(left: SideSummary, right: SideSummary): boolean {
+  if (left.edgeCount === 0 || right.edgeCount === 0) {
+    return false;
+  }
+  if (left.coverage < SHELF_COVERAGE_THRESHOLD || right.coverage < SHELF_COVERAGE_THRESHOLD) {
+    return false;
+  }
+  const minLength = Math.min(left.totalLength, right.totalLength);
+  const maxLength = Math.max(left.totalLength, right.totalLength);
+  if (maxLength === 0 || minLength / maxLength < 0.8) {
+    return false;
+  }
+  const shelfCountDiff = Math.abs(left.shelves.length - right.shelves.length);
+  if (shelfCountDiff > 1) {
+    return false;
+  }
+  return true;
+}
+
+function formatShelfSequence(ids: string[]): string {
+  const unique = ids.filter((value, index) => ids.indexOf(value) === index);
+  if (unique.length === 0) {
+    return "";
+  }
+  if (unique.length === 1) {
+    return unique[0];
+  }
+  if (unique.length === 2) {
+    return `${unique[0]} and ${unique[1]}`;
+  }
+  const initial = unique.slice(0, -1).join(", ");
+  const last = unique[unique.length - 1];
+  return `${initial}, and ${last}`;
 }
 
 function findNextOccurrence(path: RouteNode[], targetNodeId: string, startIndex: number) {
@@ -308,10 +537,10 @@ function determineProductSide({
 
   let sideVector: { x: number; y: number } | undefined;
 
-  if (approachNode) {
-    sideVector = vectorBetween(approachNode, productNode);
-  } else if (productPosition) {
+  if (productPosition) {
     sideVector = { x: productPosition.x - anchor.x, y: productPosition.y - anchor.y };
+  } else if (approachNode) {
+    sideVector = vectorBetween(approachNode, productNode);
   } else if (outgoingNode) {
     sideVector = vectorBetween(anchor, outgoingNode);
   }

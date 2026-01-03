@@ -19,6 +19,15 @@ def compute_route():
     product_codes = data.get("productCodes")
     product_names = data.get("product_names")
 
+    # Optionaler Startknoten (kann Node-ID oder Produktknoten sein)
+    start_node_id_raw = data.get("startNodeId") or data.get("start_node_id")
+    if start_node_id_raw is not None:
+        start_node_id = str(start_node_id_raw).strip()
+        if not start_node_id:
+            start_node_id = None
+    else:
+        start_node_id = None
+
     # Wenn nur Codes kommen, hole die Namen aus DB
     if product_codes and not product_names:
         conn = get_conn()
@@ -33,7 +42,7 @@ def compute_route():
         return jsonify({"error": "No product names or codes provided"}), 400
 
     try:
-        res = plan_route_by_names(product_names)
+        res = plan_route_by_names(product_names, start_node_id=start_node_id)
         return jsonify(res), 200
     except Exception as e:
         return jsonify({"error": "route planning failed", "detail": str(e)}), 500
