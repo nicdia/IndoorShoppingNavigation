@@ -10,103 +10,37 @@ import matplotlib.pyplot as plt
 
 from .benchmark import run_experiments
 
-"""
-Erzeugt Heatmaps für die Bewertung der Routing-Algorithmen.
 
-Ablauf:
-
-1) Es werden alle Szenario-×-Algorithmus-Kombinationen aus benchmark.run_experiments()
-   geladen. Jedes Setup enthält u. a. folgende Metriken:
-       - distance        (Gesamtweg)
-       - turns           (Anzahl der Abbiegevorgänge)
-       - runtime_seconds (effektive Laufzeit)
-
-2) Für jedes Szenario werden die Algorithmen relativ zueinander bewertet:
-       - kleine Distanz  → gut
-       - wenige Turns    → gut
-       - geringe Laufzeit → gut
-   Dazu wird jede Metrik per Min-Max-Skalierung auf 0–100 normalisiert
-   (invertiert, wenn „kleiner ist besser“).
-   Ergebnis = per_setup_index (ein Score pro Setup).
-
-3) Danach werden die Scores eines Algorithmus über alle Szenarien gemittelt,
-   sodass ein robuster, szenario-übergreifender Leistungsindex entsteht.
-   Ergebnis = per_algorithm_index.
-
-4) Für die aggregierte Algorithmusebene wird schließlich eine Heatmap erzeugt:
-       Zeilen   = Algorithmen
-       Spalten  = Bewertungsdimensionen
-                  (Kuerzeste_Distanz, Wenig_Abbiegen, Laufzeit, Gesamtindex)
-       Werte    = normalisierte Scores von 0–100
-
-Ziel:
-Ein konsistenter Vergleich der Routing-Algorithmen, der sowohl
-szenario-spezifische Leistung als auch die mittlere Performance
-über alle Szenarien hinweg sichtbar macht.
-"""
 def _normalize_series(s: pd.Series, invert: bool = False) -> pd.Series:
-    """
-    Bringt eine Metrik auf eine einheitliche Skala von 0–100 (Min-Max-Skalierung).
-    - 0   = schlechtester Wert in dieser Serie
-    - 100 = bester Wert in dieser Serie
-
-    invert=True:
-      kleine Rohwerte gelten als „gut“ (z.B. Distanz, Laufzeit, Turns)
-      → Skala wird umgedreht, damit am Ende trotzdem „viel = gut“ gilt.
-    """
     s = pd.to_numeric(s, errors="coerce")
     min_val = s.min()
     max_val = s.max()
 
-    # Nichts oder nur NaNs -> alles NaN zurückgeben
     if pd.isna(min_val) or pd.isna(max_val):
         return pd.Series(np.nan, index=s.index, dtype=float)
 
-    # Konstanter Wert: keine Unterschiede -> alle bekommen 100
     if max_val == min_val:
         return pd.Series(100.0, index=s.index, dtype=float)
 
-    # Normierung auf [0, 1]
     norm = (s - min_val) / (max_val - min_val)
 
-    # ggf. umdrehen, falls „kleiner ist besser“
     if invert:
         norm = 1.0 - norm
 
-    # auf 0–100 skalieren
     return (norm * 100.0).astype(float)
 
 
 def build_indices(
     df: pd.DataFrame,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Baut zwei Ebenen von Indizes:
 
-    1) per_setup_index:
-        - Index = setup (z.B. 'large_10_items__bnb_astar')
-        - Spalten:
-            scenario, algorithm_setup,
-            Kuerzeste_Distanz, Wenig_Abbiegen, Laufzeit, Gesamtindex
-        - Normalisierung erfolgt PRO SZENARIO über die Algorithmen.
-          (d.h. innerhalb eines Szenarios wird immer relativ verglichen)
-
-    2) per_algorithm_index:
-        - Index = algorithm_setup (z.B. 'bnb_dijkstra', 'bnb_astar')
-        - Spalten:
-            Kuerzeste_Distanz, Wenig_Abbiegen, Laufzeit, Gesamtindex
-        - Werte = Mittelwert der Scores über alle Szenarien.
-    """
-
-    # Sicherheits-Check: notwendige Spalten
     required_cols = {"scenario", "algorithm_setup", "distance", "turns", "runtime_seconds"}
     missing = required_cols - set(df.columns)
     if missing:
-        raise ValueError(f"Fehlende Spalten in df: {missing}")
+        raise ValueError(f"Missing columns in df: {missing}")
 
     rows = []
 
-    # 1) Pro Szenario normalisieren (nur Algorithmen dieses Szenarios)
     for scen, scen_df in df.groupby("scenario"):
         idx = scen_df.index
 
@@ -114,7 +48,6 @@ def build_indices(
         turns_score = _normalize_series(scen_df["turns"], invert=True)
         runtime_score = _normalize_series(scen_df["runtime_seconds"], invert=True)
 
-        # Gesamtindex = einfacher Mittelwert der drei Kategorien
         comp_df = pd.concat(
             [dist_score, turns_score, runtime_score],
             axis=1,
@@ -125,10 +58,10 @@ def build_indices(
             {
                 "scenario": scen,
                 "algorithm_setup": scen_df["algorithm_setup"],
-                "Kuerzeste_Distanz": dist_score,
-                "Wenig_Abbiegen": turns_score,
-                "Laufzeit": runtime_score,
-                "Gesamtindex": overall,
+                "Shortest_Path": dist_score,
+                "Fewest_Turns": turns_score,
+                "Runtime": runtime_score,
+                "Overall": overall,
             },
             index=idx,
         )
@@ -136,10 +69,9 @@ def build_indices(
 
     per_setup_index = pd.concat(rows).sort_index()
 
-    # 2) Aggregation pro Algorithmus über alle Szenarien
     per_algorithm_index = (
         per_setup_index
-        .groupby("algorithm_setup")[["Kuerzeste_Distanz", "Wenig_Abbiegen", "Laufzeit", "Gesamtindex"]]
+        .groupby("algorithm_setup")[["Shortest_Path", "Fewest_Turns", "Runtime", "Overall"]]
         .mean()
         .sort_index()
     )
@@ -148,12 +80,6 @@ def build_indices(
 
 
 def save_heatmap(index_df: pd.DataFrame, filename: Path) -> None:
-    """
-    Zeichnet eine Heatmap der Kategorie-Scores (0–100).
-    Typischerweise:
-      Zeilen = Algorithmen
-      Spalten = Kategorien (Kuerzeste_Distanz, Wenig_Abbiegen, Laufzeit, Gesamtindex).
-    """
     filename = Path(filename)
     filename.parent.mkdir(parents=True, exist_ok=True)
 
@@ -162,12 +88,8 @@ def save_heatmap(index_df: pd.DataFrame, filename: Path) -> None:
     data_filled = np.where(mask, 0.0, data)
 
     from matplotlib.colors import LinearSegmentedColormap
+    cmap = LinearSegmentedColormap.from_list("white_to_green", ["#ffffff", "#007f00"])
 
-    cmap = LinearSegmentedColormap.from_list(
-        "white_to_green", ["#ffffff", "#007f00"]
-    )
-
-    # Größe so wählen, dass Labels lesbar sind
     fig, ax = plt.subplots(
         figsize=(1.3 * data.shape[1] + 4, 0.6 * data.shape[0] + 3)
     )
@@ -175,29 +97,18 @@ def save_heatmap(index_df: pd.DataFrame, filename: Path) -> None:
 
     ax.set_xticks(np.arange(index_df.shape[1]))
     ax.set_yticks(np.arange(index_df.shape[0]))
-
     ax.set_xticklabels(index_df.columns, rotation=45, ha="right", fontsize=10)
     ax.set_yticklabels(index_df.index, fontsize=10)
 
-    # Zahlenwerte direkt in die Zellen schreiben
     for i in range(data.shape[0]):
         for j in range(data.shape[1]):
             val = "" if mask[i, j] else f"{data[i, j]:.1f}"
-            ax.text(
-                j,
-                i,
-                val,
-                ha="center",
-                va="center",
-                color="black",
-                fontsize=9,
-                fontweight="bold",
-            )
+            ax.text(j, i, val, ha="center", va="center", fontsize=9, fontweight="bold")
 
     cbar = fig.colorbar(im, ax=ax)
     cbar.set_label("Score (0–100)", rotation=90)
 
-    ax.set_title("Routing Algorithm Performance (aggregiert über Szenarien)", fontsize=14)
+    ax.set_title("Routing Algorithm Performance (aggregated over scenarios)", fontsize=14)
 
     plt.tight_layout()
     fig.savefig(str(filename), dpi=300, bbox_inches="tight")
@@ -205,32 +116,21 @@ def save_heatmap(index_df: pd.DataFrame, filename: Path) -> None:
 
 
 def main() -> None:
-    # Rohmetriken für alle Setups berechnen
     df = run_experiments()
-
-    # Index-DataFrames aufbauen
     per_setup_index, per_algorithm_index = build_indices(df)
 
-    # Basisverzeichnis: algorithm_testing/analysis_output/output_heatmap_results
-    analysis_dir = Path(__file__).resolve().parent       # .../algorithm_testing/analysis
-    algo_root = analysis_dir.parent                      # .../algorithm_testing
+    analysis_dir = Path(__file__).resolve().parent
+    algo_root = analysis_dir.parent
     out_dir = algo_root / "analysis_output" / "output_heatmap_results"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1) Detail-Index pro Setup (Szenario × Algorithmus)
-    setup_csv = out_dir / "heatmap_index_per_setup.csv"
-    per_setup_index.to_csv(setup_csv)
-    print(f"Per-Setup-Index gespeichert: {setup_csv}")
+    per_setup_index.to_csv(out_dir / "heatmap_index_per_setup.csv")
+    per_algorithm_index.to_csv(out_dir / "heatmap_index_per_algorithm.csv")
 
-    # 2) Aggregierter Index pro Algorithmus (über Szenarien gemittelt)
-    algo_csv = out_dir / "heatmap_index_per_algorithm.csv"
-    per_algorithm_index.to_csv(algo_csv)
-    print(f"Per-Algorithmus-Index gespeichert: {algo_csv}")
-
-    # Heatmap für die aggregierten Algorithmus-Scores
-    png_path = out_dir / "heatmap_index_per_algorithm.png"
-    save_heatmap(per_algorithm_index, png_path)
-    print(f"PNG-Heatmap gespeichert: {png_path}")
+    save_heatmap(
+        per_algorithm_index,
+        out_dir / "heatmap_index_per_algorithm.png",
+    )
 
 
 if __name__ == "__main__":

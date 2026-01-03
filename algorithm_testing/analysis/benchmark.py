@@ -59,28 +59,26 @@ import pandas as pd
 import networkx as nx
 
 from ..criteria.metrics_wrapper import evaluate_all_criteria
-from ..algorithms.bnb_algorithm import run_algorithm as run_bnb_dijkstra
-from ..algorithms.bnb_a_star import run_algorithm as run_bnb_astar
-
-
+from ..algorithms.bnb_dijkstra import run_algorithm as run_bnb_dijkstra
+from ..algorithms.bnb_a_star import run_algorithm as run_bnb_astar 
+from ..algorithms.nn_dijkstra import run_algorithm as run_nn_dijkstra 
+from ..algorithms.nn_a_star import run_algorithm as run_nn_astar      
+from ..algorithms.CDSSSD import run_algorithm as run_cdsssd
+from ..algorithms.EAMDSP import run_algorithm as run_eamdsp
+from ..algorithms.MDMSMD import run_algorithm as run_mdmsmd
 # ---------------------------------------------------------
 # Gemeinsame Konfigurationen: Algorithmen
 # ---------------------------------------------------------
 
-CONFIGS: List[Dict[str, Any]] = [
-    {
-        "name": "bnb_dijkstra",
-        "algo": run_bnb_dijkstra,
-        "runtime_repeats": 5,
-    },
-    {
-        "name": "bnb_astar",
-        "algo": run_bnb_astar,
-        "runtime_repeats": 5,
-    },
-    # weitere Algorithmen könntest du hier ergänzen
+CONFIGS = [
+    {"name": "bnb_dijkstra", "algo": run_bnb_dijkstra, "runtime_repeats": 3},
+    {"name": "bnb_astar",    "algo": run_bnb_astar,    "runtime_repeats": 3},
+    {"name": "nn_dijkstra",  "algo": run_nn_dijkstra,  "runtime_repeats": 5},
+    {"name": "nn_astar",     "algo": run_nn_astar,     "runtime_repeats": 5},
+    {"name": "EAMDSP",       "algo": run_eamdsp,       "runtime_repeats": 5},
+    {"name": "CDSSSD",       "algo": run_cdsssd,       "runtime_repeats": 5},
+    {"name": "MDMSMD",       "algo": run_mdmsmd,       "runtime_repeats": 5},
 ]
-
 
 # ---------------------------------------------------------
 # Testszenarien (Graph + Entry + Items + Checkouts)
