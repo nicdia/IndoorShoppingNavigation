@@ -4,12 +4,18 @@ import csv
 import math
 import os
 from pathlib import Path
+
 import networkx as nx
 from math import hypot
+import heapq
+
 from db.db import fetch_edges, fetch_product_nodes_by_names, fetch_node_coordinates_by_ids
 
 _GRAPH: Optional[nx.DiGraph] = None
 _SHELF_SEGMENTS: Optional[Dict[Tuple[str, str], Dict[str, Optional[str]]]] = None
+
+_ENTRY_COORDS_LOADED: bool = False  # print-diagnose: nur einmal loggen
+_ASTARP_CACHE_DIAG_PRINTED: bool = False  # print-diagnose: nur einmal loggen
 
 ENTRY_NODE_ID = os.environ.get("ENTRY_NODE_ID", "21").strip() or None
 _CHECKOUT_RAW = os.environ.get("CHECKOUT_NODE_IDS", "14,15")
@@ -158,13 +164,14 @@ def plan_route_by_names(product_names: List[str], start_node_id: Optional[str] =
         [entry_node] + unique_product_nodes + checkout_nodes if entry_node else unique_product_nodes + checkout_nodes
     )
 
-    dist_cache, path_cache = _compute_pairwise_shortest_paths(G, relevant_nodes)
+    # NEW: A* pairwise
+    dist_cache, path_cache = _compute_pairwise_astar_paths(G, relevant_nodes)
 
     route_nodes: List[str] = []
     planned_cost = math.inf
 
     if entry_node and (unique_product_nodes or checkout_nodes):
-        route_nodes, planned_cost = _build_entry_to_checkout_sequence(
+        route_nodes, planned_cost = _build_entry_to_checkout_sequence_astar_bnb(
             entry_node, unique_product_nodes, checkout_nodes, dist_cache
         )
 
@@ -214,13 +221,10 @@ def plan_route_by_names(product_names: List[str], start_node_id: Optional[str] =
 
     segments_with_coords: List[Dict[str, Any]] = []
     for segment in segments:
-        # Ensure segment['path'] is a list of all node ids along the edge-following path
-        # (should already be the case for connected segments, but double-check)
         path_ids = list(segment["path"]) if "path" in segment and isinstance(segment["path"], (list, tuple)) else []
-        # Defensive: if path is empty, but from/to exist, fill with [from, to]
         if not path_ids and segment.get("from") and segment.get("to"):
             path_ids = [str(segment["from"]), str(segment["to"])]
-        # Build path_coordinates for every node in path
+
         path_coordinates = []
         for node_id in path_ids:
             coords = coordinate_sources.get(str(node_id))
@@ -280,6 +284,7 @@ def plan_route_by_names(product_names: List[str], start_node_id: Optional[str] =
         "products": ordered_products,
         "node_coordinates": coordinate_sources,
         "waypoint_coordinates": waypoint_coordinates,
+        "planned_cost": planned_cost,  # diagnose: cost from BnB (should match total_cost for connected)
     }
 
 
@@ -306,7 +311,166 @@ def _unique_adjacent_preserving(seq: List[str]) -> List[str]:
     return cleaned
 
 
-def _build_entry_to_checkout_sequence(
+# ======================================================================
+#  Branch & Bound + A*
+# ======================================================================
+
+def _node_coord(graph: nx.Graph, node: str) -> Optional[Tuple[float, float]]:
+    data = graph.nodes.get(node, {})
+    if "x" in data and "y" in data:
+        return float(data["x"]), float(data["y"])
+    return None
+
+
+def _heuristic(graph: nx.Graph, u: str, v: str) -> float:
+    cu = _node_coord(graph, u)
+    cv = _node_coord(graph, v)
+    if cu is None or cv is None:
+        return 0.0
+    x1, y1 = cu
+    x2, y2 = cv
+    return math.hypot(x2 - x1, y2 - y1)
+
+
+def _astar(graph: nx.Graph, origin: str, destination: str) -> Tuple[List[str], float]:
+    if origin == destination:
+        return [origin], 0.0
+
+    infinity = math.inf
+    g_score: Dict[str, float] = {origin: 0.0}
+    f_score: Dict[str, float] = {origin: _heuristic(graph, origin, destination)}
+    came_from: Dict[str, str] = {}
+
+    open_heap: List[Tuple[float, str]] = [(f_score[origin], origin)]
+
+    while open_heap:
+        current_f, u = heapq.heappop(open_heap)
+        if current_f > f_score.get(u, infinity):
+            continue
+
+        if u == destination:
+            break
+
+        for v, attrs in graph[u].items():
+            w = float(attrs.get("weight", 1.0))
+            tentative = g_score.get(u, infinity) + w
+            if tentative < g_score.get(v, infinity):
+                came_from[v] = u
+                g_score[v] = tentative
+                f_score[v] = tentative + _heuristic(graph, v, destination)
+                heapq.heappush(open_heap, (f_score[v], v))
+
+    if destination not in g_score:
+        return [], math.inf
+
+    path: List[str] = []
+    cur = destination
+    while cur != origin:
+        path.append(cur)
+        cur = came_from.get(cur)
+        if cur is None:
+            return [], math.inf
+    path.append(origin)
+    path.reverse()
+
+    return path, float(g_score[destination])
+
+
+def _compute_pairwise_astar_paths(
+    graph: nx.DiGraph,
+    nodes: List[str],
+) -> Tuple[Dict[str, Dict[str, float]], Dict[str, Dict[str, List[str]]]]:
+    global _ENTRY_COORDS_LOADED, _ASTARP_CACHE_DIAG_PRINTED
+
+    # Ensure coords exist for nodes used in A*
+    missing_xy = [n for n in nodes if "x" not in graph.nodes.get(n, {}) or "y" not in graph.nodes.get(n, {})]
+    coords_added = 0
+
+    if missing_xy:
+        coords = fetch_node_coordinates_by_ids(missing_xy)
+        for node_id, xy in coords.items():
+            if node_id in graph:
+                graph.nodes[node_id]["x"] = float(xy["x"])
+                graph.nodes[node_id]["y"] = float(xy["y"])
+                coords_added += 1
+
+    if not _ASTARP_CACHE_DIAG_PRINTED:
+        present_xy = sum(
+            1 for n in nodes
+            if "x" in graph.nodes.get(n, {}) and "y" in graph.nodes.get(n, {})
+        )
+        print(
+            "[route_planner][A* DIAG] relevant_nodes=",
+            len(nodes),
+            " coords_present=",
+            present_xy,
+            " coords_missing_before=",
+            len(missing_xy),
+            " coords_fetched=",
+            coords_added,
+        )
+        _ASTARP_CACHE_DIAG_PRINTED = True
+
+    dist: Dict[str, Dict[str, float]] = {n: {} for n in nodes}
+    spath: Dict[str, Dict[str, List[str]]] = {n: {} for n in nodes}
+
+    for u in nodes:
+        for v in nodes:
+            if u == v:
+                continue
+            if u not in graph or v not in graph:
+                dist[u][v] = math.inf
+                spath[u][v] = []
+                continue
+            p, d = _astar(graph, u, v)
+            dist[u][v] = d
+            spath[u][v] = p
+
+    return dist, spath
+
+
+def _bnb_astar(
+    current: str,
+    remaining: List[str],
+    cost: float,
+    order_prefix: List[str],
+    dist: Dict[str, Dict[str, float]],
+    checkouts: List[str],
+    best: Tuple[Optional[List[str]], float],
+) -> Tuple[Optional[List[str]], float]:
+    best_order, best_cost = best
+
+    if cost >= best_cost:
+        return best_order, best_cost
+
+    if not remaining:
+        for c in checkouts:
+            d = dist.get(current, {}).get(c, math.inf)
+            total = cost + d
+            if math.isfinite(total) and total < best_cost:
+                best_order = order_prefix + [c]
+                best_cost = total
+        return best_order, best_cost
+
+    for nxt in sorted(remaining, key=lambda x: dist.get(current, {}).get(x, math.inf)):
+        d = dist.get(current, {}).get(nxt, math.inf)
+        if not math.isfinite(d):
+            continue
+        new_remaining = [r for r in remaining if r != nxt]
+        best_order, best_cost = _bnb_astar(
+            nxt,
+            new_remaining,
+            cost + d,
+            order_prefix + [nxt],
+            dist,
+            checkouts,
+            (best_order, best_cost),
+        )
+
+    return best_order, best_cost
+
+
+def _build_entry_to_checkout_sequence_astar_bnb(
     entry: str,
     items: List[str],
     checkouts: List[str],
@@ -315,7 +479,7 @@ def _build_entry_to_checkout_sequence(
     if not items:
         return _best_entry_checkout_only(entry, checkouts, dist)
 
-    best_order, best_cost = _bnb(
+    best_order, best_cost = _bnb_astar(
         current=entry,
         remaining=items,
         cost=0.0,
@@ -348,75 +512,6 @@ def _best_entry_checkout_only(
     if checkouts:
         return _unique_adjacent_preserving([entry, checkouts[0]]), math.inf
     return [entry], 0.0
-
-
-def _bnb(
-    current: str,
-    remaining: List[str],
-    cost: float,
-    order_prefix: List[str],
-    dist: Dict[str, Dict[str, float]],
-    checkouts: List[str],
-    best: Tuple[Optional[List[str]], float],
-) -> Tuple[Optional[List[str]], float]:
-    best_order, best_cost = best
-    if cost >= best_cost:
-        return best_order, best_cost
-
-    if not remaining:
-        for checkout in checkouts:
-            d = dist.get(current, {}).get(checkout, math.inf)
-            total = cost + d
-            if math.isfinite(total) and total < best_cost:
-                best_order = order_prefix + [checkout]
-                best_cost = total
-        return best_order, best_cost
-
-    sorted_remaining = sorted(
-        remaining,
-        key=lambda node: dist.get(current, {}).get(node, math.inf)
-    )
-    for nxt in sorted_remaining:
-        d = dist.get(current, {}).get(nxt, math.inf)
-        if not math.isfinite(d):
-            continue
-        new_remaining = [r for r in remaining if r != nxt]
-        best_order, best_cost = _bnb(
-            nxt,
-            new_remaining,
-            cost + d,
-            order_prefix + [nxt],
-            dist,
-            checkouts,
-            (best_order, best_cost),
-        )
-    return best_order, best_cost
-
-
-def _compute_pairwise_shortest_paths(
-    graph: nx.DiGraph,
-    nodes: List[str],
-) -> Tuple[Dict[str, Dict[str, float]], Dict[str, Dict[str, List[str]]]]:
-    dist: Dict[str, Dict[str, float]] = {n: {} for n in nodes}
-    spath: Dict[str, Dict[str, List[str]]] = {n: {} for n in nodes}
-    for source in nodes:
-        if source not in graph:
-            continue
-        try:
-            lengths, paths = nx.single_source_dijkstra(graph, source, weight="weight")
-        except Exception as exc:
-            print(f"[route_planner] single_source_dijkstra failed for {source}: {exc}")
-            continue
-        for target in nodes:
-            if target == source:
-                continue
-            if target in lengths:
-                dist[source][target] = lengths[target]
-                spath[source][target] = [str(nid) for nid in paths[target]]
-            else:
-                dist[source][target] = math.inf
-                spath[source][target] = []
-    return dist, spath
 
 
 def _build_segments(
