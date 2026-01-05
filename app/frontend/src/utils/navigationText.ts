@@ -51,8 +51,8 @@ const STRAIGHT_ANGLE_THRESHOLD = (20 * Math.PI) / 180;
 const UTURN_ANGLE_THRESHOLD = (150 * Math.PI) / 180;
 const PRODUCT_BRANCH_THRESHOLD = 1.5;
 const MIN_SHELF_RUN_METERS = 0.5;
-const MIN_FALLBACK_DISTANCE_METERS = 2;
-const SHELF_COVERAGE_THRESHOLD = 0.75;
+const MIN_FALLBACK_DISTANCE_METERS = 1.5;
+const SHELF_COVERAGE_THRESHOLD = 0.6;
 
 export function buildNavigationInstructions({
   path,
@@ -72,7 +72,7 @@ export function buildNavigationInstructions({
   const edgeLookup: EdgeAnnotationLookup = edgeAnnotations ?? new Map<string, EdgeAnnotation>();
 
   const startLabel = resolveNodeName(path[0].nodeId);
-  const startSentence = startLabel && startLabel !== path[0].nodeId ? `Start at ${startLabel}.` : null;
+  const startSentence = startLabel && startLabel !== path[0].nodeId ? `Start at ${startLabel}.` : "Start at the entrance.";
 
   routeItems.forEach((item, itemIndex) => {
     const targetIndex = findNextOccurrence(path, item.nodeId, cursorIndex);
@@ -198,7 +198,7 @@ export function buildNavigationInstructions({
     const destinationLabel = resolveNodeName(destinationNode.nodeId);
     const destinationDescription =
       destinationLabel && destinationLabel !== destinationNode.nodeId ? destinationLabel : "the checkout";
-    finalSentences.push(`Finish at ${destinationDescription}.`);
+    finalSentences.push(`Destination: ${destinationDescription}.`);
 
     const finalText = finalSentences.join(" ").trim();
     if (finalText) {
@@ -243,8 +243,7 @@ function buildProductNarration({
   const shelf = describeShelf(level);
 
   productUsage.set(nodeId, usage + 1);
-  const shelfPreposition = "in the";
-  return `${productName} is ${describeSide(side)} ${shelfPreposition} ${shelf}.`;
+  return `${productName} is on the ${describeSide(side)} in the ${shelf}.`;
 }
 
 function findMatchingProductCandidate({
@@ -294,10 +293,15 @@ function buildMovementSentences(
     if (lastHeading && heading) {
       const turn = classifyTurnFromVectors(lastHeading, heading);
       if (turn !== "straight") {
-        const runInstruction = buildStraightRunInstruction(runEdges, accumulatedDistance);
+        const runInstruction = buildStraightRunInstruction(runEdges, accumulatedDistance, turn);
         const turnText = buildTurnInstruction(turn);
         if (runInstruction) {
-          sentences.push(`${runInstruction}, then ${turnText}.`);
+          // Check if the instruction already includes the turn direction (e.g., "leave the aisle to the left")
+          if (runInstruction.toLowerCase().includes("leave the aisle to the")) {
+            sentences.push(`${runInstruction}.`);
+          } else {
+            sentences.push(`${runInstruction}, then ${turnText}.`);
+          }
         } else {
           sentences.push(`${capitalizeFirst(turnText)}.`);
         }
@@ -338,7 +342,11 @@ function resolveEdgeAnnotation(
   };
 }
 
-function buildStraightRunInstruction(edges: EdgeAnnotation[], fallbackDistance: number): string | null {
+function buildStraightRunInstruction(
+  edges: EdgeAnnotation[],
+  fallbackDistance: number,
+  nextTurn?: TurnDirection
+): string | null {
   if (edges.length === 0) {
     if (fallbackDistance >= MIN_FALLBACK_DISTANCE_METERS) {
       return buildStraightInstruction(fallbackDistance);
@@ -350,29 +358,32 @@ function buildStraightRunInstruction(edges: EdgeAnnotation[], fallbackDistance: 
   const leftSummary = summarizeSide("left", edges, totalDistance);
   const rightSummary = summarizeSide("right", edges, totalDistance);
 
+  // Symmetrischer Gang (Regale auf beiden Seiten)
   if (isSymmetricAisle(leftSummary, rightSummary)) {
     const shelfCount = Math.min(leftSummary.shelves.length, rightSummary.shelves.length);
     const distanceMeters = totalDistance > 0 ? totalDistance : fallbackDistance;
+    
     if (shelfCount >= 2) {
-      const shelfList = formatShelfSequence(leftSummary.shelves.slice(0, shelfCount));
-      return `Pass ${shelfCount} shelves${shelfList ? ` (${shelfList})` : ""} over the next ${formatMeters(distanceMeters)} meters`;
+      // An mehreren Regalen vorbei im Gang
+      return `Continue down the aisle for ${formatMeters(distanceMeters)}m, passing ${shelfCount} shelves`;
     }
     if (shelfCount === 1) {
-      const shelfId = leftSummary.shelves[0] ?? rightSummary.shelves[0];
-      if (shelfId) {
-        return `Stay in the aisle along shelf ${shelfId} for ${formatMeters(distanceMeters)} meters`;
+      // Bei einem einzelnen Regal und Abbiegung: "Continue for Xm, then leave the aisle to the left/right"
+      if (nextTurn === "left" || nextTurn === "right") {
+        return `Continue for ${formatMeters(distanceMeters)}m, then leave the aisle to the ${nextTurn}`;
       }
       if (distanceMeters >= MIN_FALLBACK_DISTANCE_METERS) {
-        return `Stay in the aisle for ${formatMeters(distanceMeters)} meters`;
+        return `Continue along the aisle for ${formatMeters(distanceMeters)}m`;
       }
       return null;
     }
     if (totalDistance >= MIN_FALLBACK_DISTANCE_METERS) {
-      return `Stay in the aisle for ${formatMeters(totalDistance)} meters`;
+      return `Walk ${formatMeters(totalDistance)}m straight ahead`;
     }
     return null;
   }
 
+  // Nur auf einer Seite Regale oder asymmetrisch
   const bestSummary = chooseSideSummary(leftSummary, rightSummary);
 
   if (!bestSummary) {
@@ -383,6 +394,8 @@ function buildStraightRunInstruction(edges: EdgeAnnotation[], fallbackDistance: 
     return null;
   }
 
+  const otherSummary = bestSummary === leftSummary ? rightSummary : leftSummary;
+
   if (bestSummary.coverage < SHELF_COVERAGE_THRESHOLD || bestSummary.totalLength < MIN_SHELF_RUN_METERS) {
     const effective = totalDistance > 0 ? totalDistance : fallbackDistance;
     if (effective >= MIN_FALLBACK_DISTANCE_METERS) {
@@ -391,16 +404,21 @@ function buildStraightRunInstruction(edges: EdgeAnnotation[], fallbackDistance: 
     return null;
   }
 
+  const sideText = bestSummary.side === "left" ? "left" : "right";
+  const distanceMeters = totalDistance > 0 ? totalDistance : fallbackDistance;
+
+  // Ein Regal auf der markanten Seite
   if (bestSummary.shelves.length === 1) {
-    const shelf = bestSummary.shelves[0];
-    const shelfDistance = bestSummary.totalLength > 0 ? bestSummary.totalLength : totalDistance;
-    return `Follow shelf ${shelf} on your ${bestSummary.side} for ${formatMeters(shelfDistance)} meters`;
+    // Prüfe ob andere Seite auch Regale hat
+    if (otherSummary.shelves.length > 0) {
+      return `Walk along the shelf on your ${sideText} for ${formatMeters(distanceMeters)}m`;
+    }
+    return `Follow the shelf on your ${sideText} for ${formatMeters(distanceMeters)}m`;
   }
 
+  // Mehrere Regale auf einer Seite
   const shelfCount = bestSummary.shelves.length;
-  const shelfList = formatShelfSequence(bestSummary.shelves);
-  const shelfDistance = bestSummary.totalLength > 0 ? bestSummary.totalLength : totalDistance;
-  return `Pass ${shelfCount} shelves on your ${bestSummary.side}${shelfList ? ` (${shelfList})` : ""} over the next ${formatMeters(shelfDistance)} meters`;
+  return `Pass ${shelfCount} shelves on your ${sideText} over the next ${formatMeters(distanceMeters)}m`;
 }
 
 type SideSummary = {
@@ -498,7 +516,7 @@ function findNextOccurrence(path: RouteNode[], targetNodeId: string, startIndex:
 }
 
 function buildStraightInstruction(distanceMeters: number) {
-  return `Walk ${formatMeters(distanceMeters)} meters straight ahead`;
+  return `Walk ${formatMeters(distanceMeters)}m straight ahead`;
 }
 
 function buildTurnInstruction(turn: TurnDirection) {
@@ -563,9 +581,9 @@ function determineProductSide({
 function describeSide(side: "left" | "right" | "ahead") {
   switch (side) {
     case "left":
-      return "on the left side";
+      return "left";
     case "right":
-      return "on the right side";
+      return "right";
     default:
       return "straight ahead";
   }
