@@ -356,13 +356,13 @@ function App() {
       const previousSegment = segmentCount > 0 ? Math.max(0, Math.min(routeIndex - 1, segmentCount - 1)) : 0;
       const nextSegment = segmentCount > 0 ? Math.max(0, Math.min(routeIndex, segmentCount - 1)) : previousSegment;
 
-      productsAtNode.forEach((product, productIndex) => {
+      productsAtNode.forEach((product) => {
         const fallbackId = Number(nodeId);
         const numericId = product.productId ?? (Number.isFinite(fallbackId) ? fallbackId : items.length);
         const resolvedId = Number.isFinite(numericId) ? Number(numericId) : items.length;
         const overrideLabel = getNodeLabelOverride(nodeId);
-        const isLastAtNode = productIndex === productsAtNode.length - 1;
-        const segmentIndex = productsAtNode.length > 1 && isLastAtNode ? nextSegment : previousSegment;
+        // All products at the same node share the arrival segment so the map highlight stays consistent
+        const segmentIndex = previousSegment;
 
         items.push({
           productId: resolvedId,
@@ -552,12 +552,25 @@ function App() {
       return Math.max(0, Math.min(candidate, maxSegmentIndex));
     });
   }, [routeItems, activeSegments.length]);
-  const productSegmentIndex =
-    routeItems.length === 0
-      ? activeSegments.length - 1
-      : activeIndex >= routeItems.length
-      ? activeSegments.length - 1
-      : productSegmentIndices[activeIndex] ?? 0;
+  // Check if we're moving to the next node (all products at current node are completed)
+  const currentItem = activeIndex < routeItems.length ? routeItems[activeIndex] : null;
+  const previousItem = activeIndex > 0 && activeIndex <= routeItems.length ? routeItems[activeIndex - 1] : null;
+  const isSameNodeAsPrevious = currentItem && previousItem && currentItem.nodeId === previousItem.nodeId;
+
+  const productSegmentIndex = (() => {
+    if (routeItems.length === 0) {
+      return activeSegments.length - 1;
+    }
+    if (activeIndex >= routeItems.length) {
+      return activeSegments.length - 1;
+    }
+    // If still at the same node as previous product, no segment should be highlighted
+    if (isSameNodeAsPrevious) {
+      return -1;
+    }
+    const baseSegment = productSegmentIndices[activeIndex] ?? 0;
+    return baseSegment;
+  })();
 
   const activeSegmentIndex =
     activeSegments.length === 0 || productSegmentIndex < 0
@@ -654,6 +667,10 @@ function App() {
 
   const effectiveActiveIndex = routeItems.length > 0 ? Math.min(activeIndex, routeItems.length - 1) : -1;
   const completedStepsCount = useMemo(() => completed.filter(Boolean).length, [completed]);
+  
+  // The directions array has one extra entry at the end for the checkout instruction.
+  // When all products are completed (activeIndex >= routeItems.length), highlight the checkout step.
+  const textActiveIndex = activeIndex >= routeItems.length ? directions.length - 1 : effectiveActiveIndex;
 
   return (
     <div className="app-shell">
@@ -718,7 +735,7 @@ function App() {
             <RouteSummary
               totalDistance={routeData?.total_cost ?? 0}
               directions={directions}
-              activeIndex={activeSegmentIndex}
+              activeIndex={textActiveIndex}
               completedCount={completedStepsCount}
             />
             <SelectedChecklist
