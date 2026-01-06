@@ -71,8 +71,8 @@ from ..algorithms.MDMSMD import run_algorithm as run_mdmsmd
 # ---------------------------------------------------------
 
 CONFIGS = [
-    {"name": "bnb_dijkstra", "algo": run_bnb_dijkstra, "runtime_repeats": 3},
-    {"name": "bnb_astar",    "algo": run_bnb_astar,    "runtime_repeats": 3},
+    {"name": "bnb_dijkstra", "algo": run_bnb_dijkstra, "runtime_repeats": 5},
+    {"name": "bnb_astar",    "algo": run_bnb_astar,    "runtime_repeats": 5},
     {"name": "nn_dijkstra",  "algo": run_nn_dijkstra,  "runtime_repeats": 5},
     {"name": "nn_astar",     "algo": run_nn_astar,     "runtime_repeats": 5},
     {"name": "EAMDSP",       "algo": run_eamdsp,       "runtime_repeats": 5},
