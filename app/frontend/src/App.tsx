@@ -136,28 +136,32 @@ function App() {
     return messages.length > 0 ? messages.join(". ") : null;
   }, [productsError, routeError]);
 
-  const startOptions = useMemo(() => {
-    const entranceLabel = getNodeLabelOverride(DEFAULT_ENTRY_NODE_ID) ?? "Entrance";
-
-    const nodeLabelMap = new Map<string, string>();
+  // Create a mapping from node IDs to product names for label resolution
+  const nodeLabelMap = useMemo(() => {
+    const map = new Map<string, string>();
     products.forEach((product) => {
       if (product.nodeId === null || product.nodeId === undefined) {
         return;
       }
       const nodeValue = String(product.nodeId).trim();
-      if (!nodeValue || nodeLabelMap.has(nodeValue)) {
+      if (!nodeValue || map.has(nodeValue)) {
         return;
       }
       const label = product.name?.trim() || `Product ${nodeValue}`;
-      nodeLabelMap.set(nodeValue, label);
+      map.set(nodeValue, label);
     });
+    return map;
+  }, [products]);
+
+  const startOptions = useMemo(() => {
+    const entranceLabel = getNodeLabelOverride(DEFAULT_ENTRY_NODE_ID) ?? "Entrance";
 
     const productOptions = Array.from(nodeLabelMap.entries())
       .map(([value, label]) => ({ value, label }))
       .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
 
     return [{ value: DEFAULT_ENTRY_NODE_ID, label: entranceLabel }, ...productOptions];
-  }, [products]);
+  }, [nodeLabelMap]);
 
   const coordinateLookup = useMemo(() => {
     // Build a lookup table for node coordinates with service data taking priority.
@@ -347,14 +351,20 @@ function App() {
 
     const segmentCount = Array.isArray(routeData?.segments) ? routeData.segments.length : 0;
 
-    orderedNodeIds.forEach((nodeId, routeIndex) => {
+    // Track product node count to correctly assign segment indices.
+    // Segments are: [Start→Product1, Product1→Product2, ..., ProductN→Checkout]
+    // The first product node gets segment 0, second product node gets segment 1, etc.
+    let productNodeCounter = 0;
+
+    orderedNodeIds.forEach((nodeId) => {
       const productsAtNode = nodeProductMap.get(nodeId);
       if (!productsAtNode || productsAtNode.length === 0) {
         return;
       }
 
-      const previousSegment = segmentCount > 0 ? Math.max(0, Math.min(routeIndex - 1, segmentCount - 1)) : 0;
-      const nextSegment = segmentCount > 0 ? Math.max(0, Math.min(routeIndex, segmentCount - 1)) : previousSegment;
+      // segmentIndex corresponds to the segment that leads TO this product node
+      // Segment 0 leads to the first product, Segment 1 leads to the second product, etc.
+      const segmentForThisNode = segmentCount > 0 ? Math.max(0, Math.min(productNodeCounter, segmentCount - 1)) : 0;
 
       productsAtNode.forEach((product) => {
         const fallbackId = Number(nodeId);
@@ -362,7 +372,7 @@ function App() {
         const resolvedId = Number.isFinite(numericId) ? Number(numericId) : items.length;
         const overrideLabel = getNodeLabelOverride(nodeId);
         // All products at the same node share the arrival segment so the map highlight stays consistent
-        const segmentIndex = previousSegment;
+        const segmentIndex = segmentForThisNode;
 
         items.push({
           productId: resolvedId,
@@ -372,6 +382,9 @@ function App() {
           segmentIndex,
         });
       });
+
+      // Increment counter after processing all products at this node
+      productNodeCounter += 1;
     });
 
     if (items.length > 0) {
@@ -422,14 +435,37 @@ function App() {
     if (pathNodes.length === 0) {
       return [];
     }
+    
+    // Check if we're starting from a product (not the default entrance)
+    const isProductStart = startNodeId !== DEFAULT_ENTRY_NODE_ID;
+    
     return buildNavigationInstructions({
       path: pathNodes,
       routeItems,
       nodeProductMap,
-      resolveNodeName: (nodeId) => getNodeLabelOverride(nodeId) ?? nodeId,
+      resolveNodeName: (nodeId) => {
+        // First check for special labels like "Entrance" or "Checkout"
+        const override = getNodeLabelOverride(nodeId);
+        if (override) {
+          return override;
+        }
+        // Then check if there's a product at this node from the route data
+        const productsAtNode = nodeProductMap.get(nodeId);
+        if (productsAtNode && productsAtNode.length > 0) {
+          return productsAtNode[0].productName;
+        }
+        // Then check the general product list (for start nodes that are products)
+        const productLabel = nodeLabelMap.get(nodeId);
+        if (productLabel) {
+          return productLabel;
+        }
+        // Fallback to node ID
+        return nodeId;
+      },
       edgeAnnotations,
+      isProductStart,
     });
-  }, [pathNodes, routeItems, nodeProductMap, edgeAnnotations]);
+  }, [pathNodes, routeItems, nodeProductMap, nodeLabelMap, edgeAnnotations, startNodeId]);
 
   const contentGridStyle = useMemo<CSSProperties | undefined>(() => {
     // Tie the map height to the measured canvas size for consistent layout.
