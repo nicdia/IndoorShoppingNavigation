@@ -523,3 +523,183 @@ a {
     width: 100%;
   }
 }
+
+/* ==========================================
+   MOBILE LAYOUT (max-width: 600px)
+   ========================================== */
+@media (max-width: 600px) {
+  :root {
+    font-size: 16px;
+  }
+
+  .app-shell {
+    padding: 12px 16px 24px;
+    gap: 12px;
+  }
+
+  .app-page-header {
+    margin-bottom: 4px;
+  }
+
+  .app-page-header h1 {
+    font-size: 1.3rem;
+  }
+
+  .secondary-button {
+    padding: 8px 14px;
+    font-size: 0.95rem;
+  }
+
+  .primary-button {
+    padding: 10px 20px;
+    font-size: 1rem;
+  }
+
+  /* Product list adjustments for mobile */
+  .product-list {
+    padding: 16px;
+    border-radius: 16px;
+    max-height: calc(100vh - 140px);
+  }
+
+  .product-row {
+    padding: 8px 12px;
+    border-radius: 10px;
+  }
+
+  .section-header h2 {
+    font-size: 1.2rem;
+  }
+
+  /* Start location selector adjustments */
+  .start-location-selector {
+    padding: 16px;
+  }
+
+  /* ==========================================
+     ROUTE VIEW - MOBILE SPECIFIC LAYOUT
+     ========================================== */
+  .content-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    height: calc(100vh - 100px);
+    max-height: none;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  /* Map takes ~60% of screen */
+  .content-grid .map-preview {
+    flex: 0 0 60%;
+    min-height: 0;
+    padding: 12px;
+    border-radius: 16px;
+    width: 100%;
+  }
+
+  .content-grid .map-frame {
+    height: 100%;
+  }
+
+  /* Route summary (directions) - only show active item */
+  .content-grid .route-summary {
+    flex: 0 0 auto;
+    min-height: 60px;
+    max-height: 28%;
+    padding: 12px 16px;
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .content-grid .route-summary .section-header {
+    display: none;
+  }
+
+  .content-grid .route-summary .distance {
+    display: none;
+  }
+
+  .content-grid .route-summary ol {
+    padding-left: 0;
+    gap: 0;
+  }
+
+  .content-grid .route-summary ol li {
+    display: none;
+  }
+
+  .content-grid .route-summary ol li.active {
+    display: block;
+    font-size: 1.05rem;
+    line-height: 1.45;
+    padding: 4px 0;
+  }
+
+  /* Checklist - only show active item, compact */
+  .content-grid .checklist {
+    flex: 0 0 auto;
+    min-height: 50px;
+    max-height: 10%;
+    padding: 8px 16px;
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .content-grid .checklist .section-header {
+    display: none;
+  }
+
+  .content-grid .checklist ol {
+    gap: 0;
+  }
+
+  .content-grid .checklist .checklist-item {
+    display: none;
+  }
+
+  .content-grid .checklist .checklist-item.active {
+    display: block;
+    padding: 6px 10px;
+    border-radius: 10px;
+  }
+
+  .content-grid .checklist .checklist-item .item-name {
+    font-size: 1.05rem;
+  }
+
+  .content-grid .checklist .checklist-item .item-meta {
+    font-size: 0.85rem;
+  }
+
+  /* Footer adjustments */
+  .app-footer {
+    padding: 4px 16px;
+    font-size: 0.7rem;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 400px) {
+  .app-shell {
+    padding: 8px 12px 20px;
+  }
+
+  .app-page-header h1 {
+    font-size: 1.35rem;
+  }
+
+  .content-grid .map-preview {
+    flex: 0 0 55%;
+    padding: 8px;
+  }
+
+  .content-grid .route-summary,
+  .content-grid .checklist {
+    padding: 10px 12px;
+  }
+
+  .content-grid .route-summary ol li.active {
+    font-size: 0.95rem;
+  }
+}
