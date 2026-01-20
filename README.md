@@ -1,178 +1,108 @@
 # Indoor Shopping Navigation
 
-Indoor navigation prototype developed within the "Location Based Services" master course. The project consists of a FastAPI backend that currently serves mock data and a React (Vite + TypeScript) frontend that visualises the store layout, route, and shopping checklist.
+Indoor navigation prototype developed within the "Location Based Services" master course. The project consists of a FastAPI backend for route calculation and a React frontend (Vite + TypeScript) for visualizing the floor plan, route, and shopping list.
 
 ---
 
 ## Prerequisites
 
-- Python 3.10 or newer (tested with 3.11)
-- Node.js 18 or newer (enables Vite and modern tooling)
+- Python 3.10 or newer
+- Node.js 18 or newer
 - npm (ships with Node.js)
 
-All commands below assume a Windows PowerShell shell. Adapt paths if your workspace differs.
+The following commands are for Windows PowerShell. Adjust paths as needed.
 
 ---
 
-<!-- ## Backend (FastAPI)
+## Backend (FastAPI)
 
-The backend serves mock responses for `/products` and `/route`. It is meant to mirror the structure of the future pathfinding service while the database integration is under development.
+The backend is located in `app/server/` and provides endpoints for products and route calculation.
 
 1. Change into the backend folder:
 	```powershell
-	cd .\backend
+	cd .\app\server
 	```
-2. (Recommended) Create and activate a virtual environment:
+2. Create and activate a virtual environment (recommended):
 	```powershell
 	python -m venv .venv
 	.\.venv\Scripts\Activate.ps1
 	```
 3. Install dependencies:
 	```powershell
-	pip install fastapi uvicorn
+	pip install fastapi uvicorn networkx
 	```
-4. Start the development server:
+4. Start the server:
 	```powershell
-	uvicorn main:app --reload --host 127.0.0.1 --port 8000
+	uvicorn app:app --reload --host 127.0.0.1 --port 8000
 	```
 
-The API will be available at `http://127.0.0.1:8000`. CORS is fully open for development so the frontend can talk to it without additional configuration.
+The API is available at `http://127.0.0.1:8000`. Swagger documentation at `http://127.0.0.1:8000/docs`.
 
 ### Endpoints
 
-- `GET /products` – returns a list of mock products with ids, names, categories, and level metadata.
-- `POST /route` – returns a static route payload (order, path geometry, segments, total distance, and metadata).
+- `GET /products` - List of all products with ID, name, and associated node ID
+- `POST /route` - Calculates an optimized route for the given product IDs
 
-You can inspect these responses in a browser or via Swagger UI at `http://127.0.0.1:8000/docs` once the server is running.
-
---- -->
+---
 
 ## Frontend (React + Vite)
 
-The frontend lives in `app/frontend/` and visualises the store map, the current route, and the selected checklist items.
+The frontend is located in `app/frontend/` and displays the floor plan, current route, and shopping list.
 
 1. Change into the frontend folder:
 	```powershell
-  cd .\app\frontend
+	cd .\app\frontend
 	```
-2. Install dependencies (only needed once or whenever `package.json` changes):
+2. Install dependencies (once or after changes to `package.json`):
 	```powershell
 	npm install
 	```
-3. Start the Vite dev server:
+3. Start the development server:
 	```powershell
 	npm run dev
 	```
-4. Open the local development URL printed by Vite (typically `http://127.0.0.1:5173`).
+4. Open the displayed URL in the browser (default `http://127.0.0.1:5173`).
 
-The frontend expects the backend at `http://127.0.0.1:8000` by default. To target another API base URL, create a `.env` file in `frontend/` and set `VITE_API_BASE_URL` (trailing slash optional):
+The frontend expects the backend at `http://127.0.0.1:8000`. A different URL can be set via a `.env` file in the frontend folder:
 
 ```dotenv
 VITE_API_BASE_URL=http://localhost:9000
 ```
 
-### Static Layout Data
+### Layout Data
 
-`app/frontend/public/layout.json` provides polygon data for drawing the store map. Adjust this file if the store layout changes; the frontend fetches it automatically on load.
+`app/frontend/public/layout.json` contains the polygon data for the floor plan. Adjust this file if the layout changes.
 
-### UX Behaviour
+### Usage
 
-- The red marker represents the current shopper position. When an item is checked off in the checklist, the current position snaps to that item.
+- The red marker shows the current position. When checking off a product, the position jumps to that product.
 - The blue marker shows the next target.
-- Route segments already travelled or still upcoming remain visible in light red, while the active leg is highlighted in solid red.
+- Completed and upcoming segments are displayed in light red, the active segment is highlighted in red.
 
 ---
 
-## Working on Both Services
+## Running Both Services
 
-Run backend and frontend in separate terminals for the best developer experience:
+Start backend and frontend in separate terminals:
 
 ```powershell
-# Terminal 1 (backend)
-cd .\backend
+# Terminal 1 (Backend)
+cd .\app\server
 .\.venv\Scripts\Activate.ps1
-uvicorn main:app --reload
+uvicorn app:app --reload
 
-# Terminal 2 (frontend)
+# Terminal 2 (Frontend)
 cd .\app\frontend
 npm run dev
 ```
-
-The frontend fetches product lists and new routes from the backend automatically when the user moves between selection and route views. Ensure the backend endpoints return real data; there are no longer any frontend mock fallbacks.
 
 ---
 
 ## Troubleshooting
 
-- **`npm run dev` fails immediately**: ensure dependencies are installed with `npm install` and that no other service uses port 5173.
-- **Backend 404 or refused connections**: confirm `uvicorn` is running on port 8000 and the firewall allows local traffic.
-- **Layout not rendered**: verify `frontend/public/layout.json` exists and contains valid JSON with a `polygons` array.
-
-Feel free to extend both README instructions and mock payloads as the project evolves towards real indoor routing.
-
-
-
-to do -- graph muss die exge tabelle erreichen + curl aufruf muss funktionieren 
-curl -X POST http://localhost:3001/api/route/ \
-  -H "Content-Type: application/json" \
-  -d '{"product_names":["Kiwi","Apple","Banana"]}'  
-
-  Endpoints
-  # Backend
-Starten vom Hauptverzeichnis aus: python3 src/app/server/app.py  # → läuft auf http://127.0.0.1:8000
-
-# Tests
-curl http://127.0.0.1:8000/api/health
-
-{
-  "status": "ok",
-  "timestamp": "2025-11-10T18:14:04.283608"
-}
-
-
-
-curl http://127.0.0.1:8000/products
-
-{
-  "items": [
-    {
-      "id": 2,
-      "level": 99,
-      "name": "Kiwi",
-      "nodeId": 41
-    },
-    {
-      "id": 3,
-      "level": 99,
-      "name": "Apple",
-      "nodeId": 61
-    },
-    {
-      "id": 4,
-      "level": 99,
-      "name": "Banana",
-      "nodeId": 59
-    },
-    {
-      "id": 5,
-      "level": 99,
-      "name": "Orange",
-      "nodeId": 57
-    },
-
-curl -X POST http://127.0.0.1:8000/route -H "Content-Type: application/json" \
-  -d '{"productCodes":[2,3,4]}'
-
-
-  {
-  "order": [
-    "41",
-    "61",
-    "59"
-  ],
-  "products": [
-    {
-      "name": "Kiwi",
+- `npm run dev` fails: Install dependencies with `npm install`, check if port 5173 is in use.
+- Backend not reachable: Verify uvicorn is running on port 8000.
+- Layout not displayed: Check `app/frontend/public/layout.json` for valid JSON.
       "node_id": "41",
       "product_id": 2
     },

@@ -35,6 +35,7 @@ type NavigationOptions = {
   nodeProductMap: Map<string, NodeProductEntry[]>;
   resolveNodeName: (nodeId: string) => string;
   edgeAnnotations?: EdgeAnnotationLookup;
+  isProductStart?: boolean;
 };
 
 type TurnDirection = "left" | "right" | "back" | "straight";
@@ -60,6 +61,7 @@ export function buildNavigationInstructions({
   nodeProductMap,
   resolveNodeName,
   edgeAnnotations,
+  isProductStart = false,
 }: NavigationOptions): string[] {
   if (path.length === 0 || routeItems.length === 0) {
     return [];
@@ -72,7 +74,60 @@ export function buildNavigationInstructions({
   const edgeLookup: EdgeAnnotationLookup = edgeAnnotations ?? new Map<string, EdgeAnnotation>();
 
   const startLabel = resolveNodeName(path[0].nodeId);
-  const startSentence = startLabel && startLabel !== path[0].nodeId ? `Start at ${startLabel}.` : "Start at the entrance.";
+  
+  // Handle product start: user walks to main path, then turns around to face the product
+  // From that perspective (looking at the product), describe the next direction
+  let startSentence: string;
+  
+  if (isProductStart && path.length >= 2) {
+    const productNode = path[0];
+    const mainPathNode = path[1];
+    const thirdNode = path.length >= 3 ? path[2] : undefined;
+    
+    // Direction from main path back to product (this is where the user is looking after turning around)
+    const lookingAtProduct = vectorBetween(mainPathNode, productNode);
+    // Direction along the main path to the next node
+    const toNextNode = thirdNode ? vectorBetween(mainPathNode, thirdNode) : undefined;
+    
+    if (lookingAtProduct && toNextNode) {
+      // Determine the direction to the next node from the perspective of looking at the product
+      const turnDirection = classifyTurnFromVectors(lookingAtProduct, toNextNode);
+      
+      let directionText: string;
+      switch (turnDirection) {
+        case "left":
+          directionText = "walk left";
+          break;
+        case "right":
+          directionText = "walk right";
+          break;
+        case "back":
+          directionText = "turn around and walk straight";
+          break;
+        default: // straight - means continuing in the direction we're looking, i.e., back to product
+          directionText = "turn around and walk straight";
+      }
+      
+      startSentence = `Looking at ${startLabel}, ${directionText}.`;
+      // Start navigation from the main path node, with heading towards the next node
+      cursorIndex = 1;
+      lastHeading = toNextNode;
+    } else if (lookingAtProduct) {
+      // Only two nodes (product and main path), no third node
+      startSentence = `Starting at ${startLabel}, walk to the aisle.`;
+      cursorIndex = 1;
+      lastHeading = { x: -lookingAtProduct.x, y: -lookingAtProduct.y }; // Invert: looking away from product
+    } else {
+      startSentence = startLabel && startLabel !== path[0].nodeId 
+        ? `Start at ${startLabel}.` 
+        : "Start at the entrance.";
+    }
+  } else {
+    // Normal entrance start
+    startSentence = startLabel && startLabel !== path[0].nodeId 
+      ? `Start at ${startLabel}.` 
+      : "Start at the entrance.";
+  }
 
   routeItems.forEach((item, itemIndex) => {
     const targetIndex = findNextOccurrence(path, item.nodeId, cursorIndex);
@@ -365,20 +420,20 @@ function buildStraightRunInstruction(
     
     if (shelfCount >= 2) {
       // An mehreren Regalen vorbei im Gang
-      return `Continue down the aisle for ${formatMeters(distanceMeters)}m, passing ${shelfCount} shelves`;
+      return `Continue down the aisle for ${formatMeters(distanceMeters)} m, passing ${shelfCount} shelves`;
     }
     if (shelfCount === 1) {
       // Bei einem einzelnen Regal und Abbiegung: "Continue for Xm, then leave the aisle to the left/right"
       if (nextTurn === "left" || nextTurn === "right") {
-        return `Continue for ${formatMeters(distanceMeters)}m, then leave the aisle to the ${nextTurn}`;
+        return `Continue for ${formatMeters(distanceMeters)} m, then leave the aisle to the ${nextTurn}`;
       }
       if (distanceMeters >= MIN_FALLBACK_DISTANCE_METERS) {
-        return `Continue along the aisle for ${formatMeters(distanceMeters)}m`;
+        return `Continue along the aisle for ${formatMeters(distanceMeters)} m`;
       }
       return null;
     }
     if (totalDistance >= MIN_FALLBACK_DISTANCE_METERS) {
-      return `Walk ${formatMeters(totalDistance)}m straight ahead`;
+      return `Walk ${formatMeters(totalDistance)} m straight ahead`;
     }
     return null;
   }
@@ -411,14 +466,14 @@ function buildStraightRunInstruction(
   if (bestSummary.shelves.length === 1) {
     // Prüfe ob andere Seite auch Regale hat
     if (otherSummary.shelves.length > 0) {
-      return `Walk along the shelf on your ${sideText} for ${formatMeters(distanceMeters)}m`;
+      return `Walk along the shelf on your ${sideText} for ${formatMeters(distanceMeters)} m`;
     }
-    return `Follow the shelf on your ${sideText} for ${formatMeters(distanceMeters)}m`;
+    return `Follow the shelf on your ${sideText} for ${formatMeters(distanceMeters)} m`;
   }
 
   // Mehrere Regale auf einer Seite
   const shelfCount = bestSummary.shelves.length;
-  return `Pass ${shelfCount} shelves on your ${sideText} over the next ${formatMeters(distanceMeters)}m`;
+  return `Pass ${shelfCount} shelves on your ${sideText} over the next ${formatMeters(distanceMeters)} m`;
 }
 
 type SideSummary = {
@@ -516,7 +571,7 @@ function findNextOccurrence(path: RouteNode[], targetNodeId: string, startIndex:
 }
 
 function buildStraightInstruction(distanceMeters: number) {
-  return `Walk ${formatMeters(distanceMeters)}m straight ahead`;
+  return `Walk ${formatMeters(distanceMeters)} m straight ahead`;
 }
 
 function buildTurnInstruction(turn: TurnDirection) {
