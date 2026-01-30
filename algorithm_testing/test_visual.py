@@ -3,24 +3,25 @@
 
 import os 
 
-"""
-# TK/TCL Fix (Windows) - comment out or edit lib path
-os.environ['TCL_LIBRARY'] = r'C:\Users\nikla\AppData\Local\Programs\Python\Python313\tcl\tcl8.6'
-os.environ['TK_LIBRARY']  = r'C:\Users\nikla\AppData\Local\Programs\Python\Python313\tcl\tk8.6'
-"""
+# """
+# # TK/TCL Fix (Windows) - comment out or edit lib path
+# os.environ['TCL_LIBRARY'] = r'C:\Users\nikla\AppData\Local\Programs\Python\Python313\tcl\tcl8.6'
+# os.environ['TK_LIBRARY']  = r'C:\Users\nikla\AppData\Local\Programs\Python\Python313\tcl\tk8.6'
+# """
 
 import networkx as nx
 import matplotlib.pyplot as plt
 
 from criteria.metrics_wrapper import evaluate_all_criteria
-from algorithms.bnb_dijkstra import run_algorithm
-#from algorithms.bnb_a_star import run_algorithm
+# from algorithms.bnb_dijkstra import run_algorithm
+# from algorithms.bnb_a_star import run_algorithm
 #from algorithms.CDSSSD import run_algorithm
 #from algorithms.MDMSMD import run_algorithm
 #from algorithms.EAMDSP import run_algorithm
 #from algorithms.nn_dijkstra import run_algorithm
 #from algorithms.nn_a_star import run_algorithm
-
+from algorithms.bnb_a_star_modified_lowerbound import run_algorithm
+# from algorithms.bnb_a_star_modified_lowerbound_preload_astar import run_algorithm
 
 def load_graph(path: str) -> nx.Graph:
     """
