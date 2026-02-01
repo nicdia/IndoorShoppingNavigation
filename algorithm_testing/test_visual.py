@@ -19,10 +19,10 @@ from criteria.metrics_wrapper import evaluate_all_criteria
 #from algorithms.MDMSMD import run_algorithm
 #from algorithms.EAMDSP import run_algorithm
 #from algorithms.nn_dijkstra import run_algorithm
-#from algorithms.nn_a_star import run_algorithm
-from algorithms.bnb_a_star_modified_lowerbound import run_algorithm
+# from algorithms.nn_a_star import run_algorithm
+# from algorithms.bnb_a_star_modified_lowerbound import run_algorithm
 # from algorithms.bnb_a_star_modified_lowerbound_preload_astar import run_algorithm
-
+from algorithms.bnb_a_star_modified_mstbound import run_algorithm
 def load_graph(path: str) -> nx.Graph:
     """
     Lädt den Graphen und stellt sicher, dass jede Kante ein 'weight'-Attribut hat.
