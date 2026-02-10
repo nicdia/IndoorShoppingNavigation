@@ -112,7 +112,7 @@ python -m venv .venv
 3. Install dependencies:
 
 ```powershell
-pip install fastapi uvicorn networkx
+pip install -r requirements.txt
 ```
 
 4. Start the server:
