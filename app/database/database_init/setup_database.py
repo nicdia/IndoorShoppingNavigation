@@ -8,14 +8,14 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
-BACKEND_DIR = ROOT_DIR / "backend"
-RESOURCES_DIR = ROOT_DIR / "resources"
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+RESOURCES_DIR = PROJECT_ROOT / "resources"
 
-DATABASE_PATH = BACKEND_DIR / "shopping.db"
+DATABASE_PATH = PROJECT_ROOT / "indoor_shopping_nav.db"
 SCHEMA_SQL = Path(__file__).with_name("create_queries.sql")
+FRONTEND_VIEW_SQL = Path(__file__).resolve().parents[1] / "transformation_queries" / "create_frontend_view.sql"
 PRODUCTS_CSV = RESOURCES_DIR / "id_products.csv"
-GRAPHML = RESOURCES_DIR / "shop_graph.graphml"
+GRAPHML = RESOURCES_DIR / "graph.graphml"
 GRAPH_NS = {"g": "http://graphml.graphdrawing.org/xmlns"}
 
 
@@ -76,8 +76,6 @@ def load_products(path: Path) -> List[Tuple[int, str, int]]:
 
 
 def main() -> None:
-    BACKEND_DIR.mkdir(exist_ok=True)
-
     conn = sqlite3.connect(DATABASE_PATH)
     conn.execute("PRAGMA foreign_keys=ON;")
 
@@ -88,6 +86,8 @@ def main() -> None:
         nodes, edges = parse_graphml(GRAPHML)
         print(f"Parsed {len(nodes)} nodes and {len(edges)} edges from {GRAPHML.name}")
 
+        conn.execute("DELETE FROM product_locations")
+        conn.execute("DELETE FROM products")
         conn.execute("DELETE FROM edges")
         conn.execute("DELETE FROM nodes")
         conn.executemany(
@@ -102,8 +102,6 @@ def main() -> None:
         products = load_products(PRODUCTS_CSV)
         print(f"Loaded {len(products)} products from {PRODUCTS_CSV.name}")
 
-        conn.execute("DELETE FROM product_locations")
-        conn.execute("DELETE FROM products")
         conn.executemany(
             "INSERT INTO products (product_code, product_name, product_level) VALUES (?, ?, ?)",
             products,
@@ -116,6 +114,11 @@ def main() -> None:
             JOIN nodes n ON n.node_id = p.product_code
             """
         )
+
+        # Create the frontend view used by the Flask API
+        view_sql = FRONTEND_VIEW_SQL.read_text(encoding="utf-8")
+        conn.executescript(view_sql)
+        print(f"Created view v_product_map from {FRONTEND_VIEW_SQL.name}")
 
     with conn:
         counts = {
