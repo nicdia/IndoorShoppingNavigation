@@ -11,9 +11,15 @@ DEFAULT_DB_PATH = PROJECT_ROOT / "indoor_shopping_nav.db"
 
 DB_PATH = Path(os.environ.get("DB_PATH", str(DEFAULT_DB_PATH))).expanduser().resolve()
 
+if not DB_PATH.exists():
+    raise FileNotFoundError(
+        f"Database not found at {DB_PATH}. "
+        f"Run  python app/database/database_init/setup_database.py  from the repo root first."
+    )
+
 def get_conn():
     if "db_conn" not in g:
-        conn = sqlite3.connect(str(DB_PATH))
+        conn = sqlite3.connect(f"file:{DB_PATH}?mode=rw", uri=True)
         conn.row_factory = sqlite3.Row
         g.db_conn = conn
         print("Using DB:", DB_PATH)

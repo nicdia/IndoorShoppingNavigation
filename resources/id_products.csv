@@ -30,12 +30,12 @@ id,product,level
 118,Chicken Wings,2
 120,Pork Chops,99
 122,Chicken Nuggets,99
-141, Flour,1
-141, Sugar,2
-141, Baking Powder,3
-139, Peanut,1
-139, Almond,2
-139, Cashew,3
+141,Flour,1
+141,Sugar,2
+141,Baking Powder,3
+139,Peanut,1
+139,Almond,2
+139,Cashew,3
 127,Creamcheese,1
 127,Butter,2
 127,Yogurt,3
@@ -56,7 +56,7 @@ id,product,level
 151,Vodka,2
 151,Rum,3
 98,Milk,99
-96,Butter,1
+96,Garlic Butter,1
 96,Whipped Cream,2
 96,Sour Cream,3
 94,Frozen Vegetables,1
