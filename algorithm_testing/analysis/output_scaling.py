@@ -61,14 +61,6 @@ from ..algorithms.bnb_a_star_modified_mstbound import run_algorithm as bnb_a_sta
 
 
 # =========================
-# Windows TK/TCL Fix (optional)
-# =========================
-# Uncomment or adjust if you see Tk/Tcl-related errors on Windows.
-os.environ["TCL_LIBRARY"] = r"C:\Users\nikla\AppData\Local\Programs\Python\Python313\tcl\tcl8.6"
-os.environ["TK_LIBRARY"] = r"C:\Users\nikla\AppData\Local\Programs\Python\Python313\tcl\tk8.6"
-
-
-# =========================
 # Central Benchmark Config
 # =========================
 CFG = {
