@@ -171,9 +171,14 @@ def plan_route_by_names(product_names: List[str], start_node_id: Optional[str] =
     planned_cost = math.inf
 
     if entry_node and (unique_product_nodes or checkout_nodes):
-        route_nodes, planned_cost = _build_entry_to_checkout_sequence_astar_bnb(
-            entry_node, unique_product_nodes, checkout_nodes, dist_cache
-        )
+        if len(unique_product_nodes) > 20:
+            route_nodes, planned_cost = _build_entry_to_checkout_sequence_eamdsp(
+                entry_node, unique_product_nodes, checkout_nodes, dist_cache, path_cache
+            )
+        else:
+            route_nodes, planned_cost = _build_entry_to_checkout_sequence_astar_bnb(
+                entry_node, unique_product_nodes, checkout_nodes, dist_cache
+            )
 
     if not route_nodes:
         # Fallback: verwende Produkte in Eingabereihenfolge und hänge erste Kasse an
@@ -440,7 +445,9 @@ def _bnb_astar(
 ) -> Tuple[Optional[List[str]], float]:
     best_order, best_cost = best
 
-    if cost >= best_cost:
+    lb = _compute_mst_lower_bound(current, remaining, checkouts, dist)
+    if cost + lb >= best_cost:
+
         return best_order, best_cost
 
     if not remaining:
@@ -469,6 +476,61 @@ def _bnb_astar(
 
     return best_order, best_cost
 
+def _compute_mst_cost(nodes: List[str], dist: Dict[str, Dict[str, float]]) -> float:
+    if len(nodes) <= 1:
+        return 0.0
+
+    in_tree = {nodes[0]}
+    mst_cost = 0.0
+
+    while len(in_tree) < len(nodes):
+        best_distance = math.inf
+        best_node = None
+
+        for u in in_tree:
+            for v in nodes:
+                if v in in_tree:
+                    continue
+                d = dist.get(u, {}).get(v, math.inf)
+                if d < best_distance:
+                    best_distance = d
+                    best_node = v
+
+        if best_node is None:
+            return math.inf
+
+        in_tree.add(best_node)
+        mst_cost += best_distance
+
+    return mst_cost
+
+
+def _compute_mst_lower_bound(
+    current: str,
+    remaining: List[str],
+    checkouts: List[str],
+    dist: Dict[str, Dict[str, float]],
+) -> float:
+    if not remaining:
+        return 0.0
+
+    min_to_remaining = min((dist.get(current, {}).get(r, math.inf) for r in remaining), default=math.inf)
+    if not math.isfinite(min_to_remaining):
+        return math.inf
+
+    mst_cost = _compute_mst_cost(remaining, dist)
+    if not math.isfinite(mst_cost):
+        return math.inf
+
+    min_to_checkout = min(
+        (dist.get(r, {}).get(c, math.inf) for r in remaining for c in checkouts),
+        default=math.inf,
+    )
+    if not math.isfinite(min_to_checkout):
+        return math.inf
+
+    return min_to_remaining + mst_cost + min_to_checkout
+
 
 def _build_entry_to_checkout_sequence_astar_bnb(
     entry: str,
@@ -493,6 +555,59 @@ def _build_entry_to_checkout_sequence_astar_bnb(
 
     fallback = [entry] + items + ([checkouts[0]] if checkouts else [])
     return _unique_adjacent_preserving(fallback), math.inf
+
+
+def _build_entry_to_checkout_sequence_eamdsp(
+    entry: str,
+    items: List[str],
+    checkouts: List[str],
+    dist: Dict[str, Dict[str, float]],
+    path: Dict[str, Dict[str, List[str]]],
+) -> Tuple[List[str], float]:
+    if not items:
+        return _best_entry_checkout_only(entry, checkouts, dist)
+
+    remaining = list(items)
+    current = entry
+    item_order: List[str] = []
+    walk: List[str] = [entry]
+    total_cost = 0.0
+
+    while remaining:
+        reachable = [n for n in remaining if math.isfinite(dist.get(current, {}).get(n, math.inf))]
+        if not reachable:
+            return [], math.inf
+
+        next_item = min(reachable, key=lambda n: dist.get(current, {}).get(n, math.inf))
+        segment = list(path.get(current, {}).get(next_item, []))
+        segment_cost = dist.get(current, {}).get(next_item, math.inf)
+
+        if not segment or not math.isfinite(segment_cost):
+            return [], math.inf
+
+        if walk and segment[0] == walk[-1]:
+            walk.extend(segment[1:])
+        else:
+            walk.extend(segment)
+
+        total_cost += segment_cost
+        item_order.append(next_item)
+        remaining.remove(next_item)
+        current = next_item
+
+    best_checkout = None
+    best_checkout_cost = math.inf
+    for checkout in checkouts:
+        checkout_cost = dist.get(current, {}).get(checkout, math.inf)
+        if math.isfinite(checkout_cost) and checkout_cost < best_checkout_cost:
+            best_checkout = checkout
+            best_checkout_cost = checkout_cost
+
+    if best_checkout is None:
+        return [], math.inf
+
+    return [entry] + item_order + [best_checkout], total_cost + best_checkout_cost
+
 
 
 def _best_entry_checkout_only(
