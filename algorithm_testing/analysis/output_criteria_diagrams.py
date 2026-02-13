@@ -1,37 +1,36 @@
 """
-Erzeugt Vergleichsdiagramme für die drei Bewertungsdimensionen des Routing-Benchmarks:
-    - Kuerzeste_Distanz   → distance
-    - Wenig_Abbiegen      → turns
-    - Laufzeit            → runtime_seconds
+Generates comparison diagrams for the three evaluation dimensions of the routing benchmark:
+    - Shortest_Distance   → distance
+    - Few_Turns           → turns
+    - Runtime             → runtime_seconds
 
-Ablauf:
+Workflow:
 
-1) run_experiments() liefert Rohmetriken für jede Kombination aus
-   (Szenario × Algorithmus), u. a.:
+1) run_experiments() provides raw metrics for each combination of
+   (scenario × algorithm), including:
        distance, turns, runtime_seconds.
 
-2) Diese Rohdaten werden vollständig gespeichert
-   (criteria_raw_metrics_per_setup.csv), um alle Szenarien einzeln
-   nachvollziehbar zu halten.
+2) These raw data are stored completely
+   (criteria_raw_metrics_per_setup.csv) in order to keep all scenarios
+   individually traceable.
 
-3) Danach werden die Metriken PRO ALGORITHMUS über alle Szenarien gemittelt,
-   sodass für jede Bewertungsdimension ein einziger absoluter Wert
-   pro Algorithmus entsteht.  
-   Ergebnis: criteria_metrics_per_algorithm.csv
+3) Afterwards, the metrics are averaged PER ALGORITHM across all scenarios,
+   resulting in a single absolute value per algorithm for each
+   evaluation dimension.  
+   Result: criteria_metrics_per_algorithm.csv
 
-4) Für jede der drei Kategorien wird ein Balkendiagramm erzeugt:
-       - Kuerzeste_Distanz → distance
-       - Wenig_Abbiegen    → turns
-       - Laufzeit          → runtime_seconds
+4) For each of the three categories, a bar chart is generated:
+       - Shortest_Distance → distance
+       - Few_Turns         → turns
+       - Runtime           → runtime_seconds
 
-   Diese Diagramme visualisieren absolute Leistungsunterschiede
-   (im Gegensatz zur Heatmap, die normalisierte Scores zeigt).
+   These diagrams visualize absolute performance differences
+   (in contrast to the heatmap, which shows normalized scores).
 
-Ziel:
-Ein klarer, szenarioübergreifender Vergleich der Routing-Algorithmen in den
-drei Hauptkategorien des Benchmarks.
+Goal:
+A clear, cross-scenario comparison of the routing algorithms across
+the three main benchmark categories.
 """
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -43,25 +42,22 @@ import pandas as pd
 from .benchmark import run_experiments
 
 
-# Konsistente Kategorien wie im Heatmap-Skript
 CATEGORY_METRICS: Dict[str, List[str]] = {
-    "Kuerzeste_Distanz": ["distance"],
-    "Wenig_Abbiegen": ["turns"],
-    "Laufzeit": ["runtime_seconds"],
+    "Comparison_of_Distances": ["distance"],
+    "Comparison_of_Turns": ["turns"],
+    "Comparison_of_Runtime": ["runtime_seconds"],
 }
 
-# Farben pro Kategorie
 CATEGORY_COLORS: Dict[str, str] = {
-    "Kuerzeste_Distanz": "#2ca02c",  # grün
-    "Wenig_Abbiegen": "#ff7f0e",     # orange
-    "Laufzeit": "#1f77b4",           # blau
+    "Comparison_of_Distances": "#2ca02c",   # green
+    "Comparison_of_Turns": "#ff7f0e",       # orange
+    "Comparison_of_Runtime": "#1f77b4",     # blue
 }
 
-# Achsenlabels
 Y_LABELS: Dict[str, str] = {
-    "distance": "Gesamtdistanz (Gewicht, gemittelt)",
-    "turns": "Anzahl Abbiegen (gemittelt)",
-    "runtime_seconds": "Laufzeit (Sekunden, gemittelt)",
+    "distance": "Overall distance (m, average)",
+    "turns": "Number of Turns (average)",
+    "runtime_seconds": "Runtime (s, average)",
 }
 
 
@@ -73,8 +69,8 @@ def plot_metric_bar(
     out_dir: Path,
 ) -> None:
     """
-    Erzeugt ein Balkendiagramm mit absoluten Werten einer Metrik,
-    aggregiert pro Algorithmus (über alle Szenarien gemittelt).
+    Generates a bar chart with absolute values ​​of a metric,
+    aggregated per algorithm (averaged across all scenarios).
     """
     if metric not in df.columns:
         return
@@ -82,7 +78,7 @@ def plot_metric_bar(
     values = df[metric]
     algos = df.index
 
-    fig, ax = plt.subplots(figsize=(8, 4))
+    fig, ax = plt.subplots(figsize=(8, 5))
 
     x_pos = range(len(algos))
     bars = ax.bar(x_pos, values.values, color=color)
@@ -95,7 +91,6 @@ def plot_metric_bar(
 
     ax.set_title(f"{category}", fontsize=14)
 
-    # Werte über Balken schreiben
     for rect, value in zip(bars, values.values):
         ax.text(
             rect.get_x() + rect.get_width() / 2.0,
@@ -111,24 +106,21 @@ def plot_metric_bar(
     fig.savefig(out_dir / filename, dpi=300, bbox_inches="tight")
     plt.close(fig)
 
-    print(f"Diagramm gespeichert: {out_dir / filename}")
+    print(f"image saved as: {out_dir / filename}")
 
 
 def main() -> None:
     df = run_experiments()
 
-    # Basisordner
     analysis_dir = Path(__file__).resolve().parent
     algo_root = analysis_dir.parent
     out_dir = algo_root / "analysis_output" / "output_criteria_diagram_results" / "output_criteria_diagrams"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Rohdaten sichern
     raw_csv = out_dir / "criteria_raw_metrics_per_setup.csv"
     df.to_csv(raw_csv)
-    print(f"Rohmetriken (pro Setup) gespeichert: {raw_csv}")
+    print(f"metrics saved as: {raw_csv}")
 
-    # Aggregation pro Algorithmus
     agg = (
         df.groupby("algorithm_setup")[["runtime_seconds", "distance", "turns"]]
         .mean()
@@ -137,7 +129,7 @@ def main() -> None:
 
     agg_csv = out_dir / "criteria_metrics_per_algorithm.csv"
     agg.to_csv(agg_csv)
-    print(f"Aggregierte Metriken (pro Algorithmus) gespeichert: {agg_csv}")
+    print(f"Aggregated metrics (per algorithm) stored: {agg_csv}")
 
     # Diagramme erzeugen
     for category, metrics in CATEGORY_METRICS.items():

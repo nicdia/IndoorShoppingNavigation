@@ -1,55 +1,55 @@
 """
-Benchmark-Skript für die Indoor-Routing-Algorithmen (BnB + Dijkstra / A*).
+Benchmark script for the indoor routing algorithms (BnB + Dijkstra / A*).
 
-Ablauf / Aufbau:
+Workflow / Structure:
 
-1) Algorithmus-Konfigurationen (CONFIGS)
-   - Es werden verschiedene Routing-Algorithmen konfiguriert, aktuell:
-         * bnb_dijkstra  (Branch & Bound + Dijkstra als Shortest-Path)
-         * bnb_astar     (Branch & Bound + A* als Shortest-Path)
-   - Für jeden Algorithmus kann festgelegt werden, wie oft die Laufzeit
-     gemessen werden soll (runtime_repeats).
+1) Algorithm configurations (CONFIGS)
+   - Different routing algorithms are configured, currently:
+         * bnb_dijkstra  (Branch & Bound + Dijkstra as shortest-path method)
+         * bnb_astar     (Branch & Bound + A* as shortest-path method)
+   - For each algorithm, the number of runtime measurements can be specified
+     (runtime_repeats).
 
-2) Testszenarien (SCENARIOS)
-   - Jedes Szenario beschreibt ein fixes Routing-Setup auf demselben Graphen:
-         * graph_path  → Pfad zur GraphML-Datei
-         * entry       → Einstiegs-Knoten
-         * items       → Liste von Item-Knoten, die besucht werden müssen
-         * checkouts   → mögliche Ziel-/Checkout-Knoten
-   - Die Szenarien unterscheiden sich v. a. durch die Anzahl und räumliche
-     Verteilung der Items (klein, mittel, groß), um unterschiedliche
-     Schwierigkeitsgrade abzudecken.
+2) Test scenarios (SCENARIOS)
+   - Each scenario defines a fixed routing setup on the same graph:
+         * graph_path  → path to the GraphML file
+         * entry       → entry node
+         * items       → list of item nodes that must be visited
+         * checkouts   → possible target / checkout nodes
+   - The scenarios mainly differ in the number and spatial distribution
+     of items (small, medium, large) in order to cover different
+     difficulty levels.
 
 3) run_experiments()
-   - Für jede Kombination aus (Szenario × Algorithmus) wird:
-         * der Graph geladen (mit sichergestelltem 'weight'-Attribut),
-         * der Algorithmus über evaluate_all_criteria ausgeführt,
-         * folgende Metriken extrahiert:
-               - runtime_seconds (Laufzeit, ggf. über mehrere Wiederholungen gemittelt)
-               - distance        (Gesamtdistanz entlang des Walks)
-               - turns           (Anzahl der Richtungswechsel im Walk)
-               - route_order     (Reihenfolge: Entry → Items → Checkout)
-               - walk_length     (Anzahl der Knoten im Walk)
-   - Alle Ergebnisse werden in einem DataFrame gesammelt, wobei jede Zeile
-     einem Setup "scenario__algorithm" entspricht.
-   - Dieses DataFrame ist die Grundlage für:
-         * Tabellenausgaben (output_table.py),
-         * Heatmap-Visualisierung (output_heatmap.py),
-         * Kriteriendiagramme (output_criteria_diagrams.py).
+   - For each combination of (scenario × algorithm):
+         * the graph is loaded (ensuring the 'weight' attribute is present),
+         * the algorithm is executed via evaluate_all_criteria,
+         * the following metrics are extracted:
+               - runtime_seconds (runtime, optionally averaged over multiple repetitions)
+               - distance        (total distance along the walk)
+               - turns           (number of direction changes in the walk)
+               - route_order     (order: Entry → Items → Checkout)
+               - walk_length     (number of nodes in the walk)
+   - All results are collected in a DataFrame, where each row corresponds
+     to one setup "scenario__algorithm".
+   - This DataFrame serves as the basis for:
+         * table outputs (output_table.py),
+         * heatmap visualization (output_heatmap.py),
+         * criteria diagrams (output_criteria_diagrams.py).
 
 4) run_scaling_experiments()
-   - Optionaler Benchmark zur Skalierung:
-         * Es wird für ein ausgewähltes Szenario die Anzahl der Items
-           variiert (n_items_list).
-         * Für jede Item-Anzahl und jeden Algorithmus werden Laufzeit,
-           Distanz und Turns gemessen.
-   - Ziel: zu analysieren, wie die Algorithmen mit wachsender Problemgröße
-     (mehr Items) skalieren.
+   - Optional benchmark for scalability:
+         * For a selected scenario, the number of items is varied
+           (n_items_list).
+         * For each item count and each algorithm, runtime,
+           distance, and turns are measured.
+   - Objective: analyze how the algorithms scale with increasing
+     problem size (more items).
 
-Ziel:
-Ein reproduzierbarer Benchmark-Rahmen, um Routing-Algorithmen anhand
-klarer Szenarien und einheitlicher Metriken zu vergleichen und sowohl
-Qualität (Distanz, Turns) als auch Effizienz (Laufzeit) auszuwerten.
+Goal:
+A reproducible benchmarking framework to compare routing algorithms
+based on clearly defined scenarios and standardized metrics, evaluating
+both solution quality (distance, turns) and efficiency (runtime).
 """
 
 from __future__ import annotations
@@ -60,32 +60,37 @@ import networkx as nx
 
 from ..criteria.metrics_wrapper import evaluate_all_criteria
 from ..algorithms.bnb_dijkstra import run_algorithm as run_bnb_dijkstra
-from ..algorithms.bnb_a_star import run_algorithm as run_bnb_astar 
+from ..algorithms.bnb_a_star import run_algorithm as run_bnb_astar
+from ..algorithms.bnb_a_star_modified_lowerbound import run_algorithm as run_bnb_astar_lowerbound
+from ..algorithms.bnb_a_star_modified_lowerbound_preload_astar import run_algorithm as run_bnb_astar_lowerbound_preload_astar
+from ..algorithms.bnb_a_star_modified_mstbound import run_algorithm as run_bnb_astar_mstbound  
 from ..algorithms.nn_dijkstra import run_algorithm as run_nn_dijkstra 
 from ..algorithms.nn_a_star import run_algorithm as run_nn_astar      
-from ..algorithms.CDSSSD import run_algorithm as run_cdsssd
 from ..algorithms.EAMDSP import run_algorithm as run_eamdsp
 from ..algorithms.MDMSMD import run_algorithm as run_mdmsmd
+
 # ---------------------------------------------------------
-# Gemeinsame Konfigurationen: Algorithmen
+# Common Configuration: Algorithms
 # ---------------------------------------------------------
 
 CONFIGS = [
-    {"name": "bnb_dijkstra", "algo": run_bnb_dijkstra, "runtime_repeats": 5},
-    {"name": "bnb_astar",    "algo": run_bnb_astar,    "runtime_repeats": 5},
-    {"name": "nn_dijkstra",  "algo": run_nn_dijkstra,  "runtime_repeats": 5},
-    {"name": "nn_astar",     "algo": run_nn_astar,     "runtime_repeats": 5},
-    {"name": "EAMDSP",       "algo": run_eamdsp,       "runtime_repeats": 5},
-    {"name": "CDSSSD",       "algo": run_cdsssd,       "runtime_repeats": 5},
-    {"name": "MDMSMD",       "algo": run_mdmsmd,       "runtime_repeats": 5},
+    {"name": "bnb_dijkstra",                        "algo": run_bnb_dijkstra,                       "runtime_repeats": 5},
+    {"name": "bnb_astar",                           "algo": run_bnb_astar,                          "runtime_repeats": 5},
+    {"name": "nn_dijkstra",                         "algo": run_nn_dijkstra,                        "runtime_repeats": 5},
+    {"name": "nn_astar",                            "algo": run_nn_astar,                           "runtime_repeats": 5},
+    {"name": "EAMDSP",                              "algo": run_eamdsp,                             "runtime_repeats": 5},
+    {"name": "MDMSMD",                              "algo": run_mdmsmd,                             "runtime_repeats": 5},
+    {"name": "bnb_astar_lowerbound",                "algo": run_bnb_astar_lowerbound,               "runtime_repeats": 5},
+    {"name": "bnb_astar_lowerbound_preload_astar",  "algo": run_bnb_astar_lowerbound_preload_astar, "runtime_repeats": 5},
+    {"name": "bnb_astar_mstbound",                  "algo": run_bnb_astar_mstbound,                 "runtime_repeats": 5}
 ]
 
 # ---------------------------------------------------------
-# Testszenarien (Graph + Entry + Items + Checkouts)
+# Test Scenarios (Graph + Entry + Items + Checkouts)
 # ---------------------------------------------------------
 
 SCENARIOS: List[Dict[str, Any]] = [
-    # 1) Kleines, lokales Szenario – alles in der Nähe von Entry (unten links)
+    # 1) Small, local scenario with 3 items close to the entry
     {
         "name": "small_3_items",
         "graph_path": "resources/graph.graphml",
@@ -101,7 +106,7 @@ SCENARIOS: List[Dict[str, Any]] = [
         ],
     },
 
-    # 2) Mittleres Szenario – Items von unten links bis mittig/oben rechts (~y 26)
+    # 2) Medium senario with 3 items
     {
         "name": "medium_6_items",
         "graph_path": "resources/graph.graphml",
@@ -120,22 +125,22 @@ SCENARIOS: List[Dict[str, Any]] = [
         ],
     },
 
-    # 3) Großes Szenario – Items über den ganzen Store verteilt (maximale Ausdehnung)
+    # 3) Larger Scenario with 10 items distributed in the whole store 
     {
         "name": "large_10_items",
         "graph_path": "resources/graph.graphml",
         "entry": "21",  # (2, 2)
         "items": [
-            "41",   # (1, 6)    – unten links
+            "41",   # (1, 6)
             "59",   # (1, 13)
             "72",   # (6, 24)
             "88",   # (14, 16)
             "95",   # (19, 26)
             "132",  # (11, 26)
-            "101",  # (15, 36)  – oben mittig/rechts
-            "111",  # (9, 38)   – oben mittig
-            "127",  # (1, 39)   – oben ganz links
-            "146",  # (19, 34)  – oben rechts
+            "101",  # (15, 36)
+            "111",  # (9, 38)
+            "127",  # (1, 39)
+            "146",  # (19, 34)
         ],
         "checkouts": [
             "14",  # (15, 6)
@@ -145,12 +150,12 @@ SCENARIOS: List[Dict[str, Any]] = [
 ]
 
 # ---------------------------------------------------------
-# Helper: Graph laden (mit Weight-Attribut)
+# Helper: load graph 
 # ---------------------------------------------------------
 
 def load_graph(path: str) -> nx.Graph:
     """
-    Lädt den Graphen und stellt sicher, dass jede Kante ein 'weight'-Attribut hat.
+    Loads the graph and ensures that every edge has a 'weight' attribute.
     """
     G = nx.read_graphml(path)
     for u, v, d in G.edges(data=True):
@@ -159,13 +164,13 @@ def load_graph(path: str) -> nx.Graph:
 
 
 # ---------------------------------------------------------
-# 1) Quality Benchmark – alle Szenarien × Algorithmen
+# 1) Quality Benchmark – all Scenarien × Algorithms
 # ---------------------------------------------------------
 
 def run_experiments() -> pd.DataFrame:
     """
-    Führt alle Algorithmus+Szenario-Kombis aus und gibt ein DataFrame
-    mit allen Metriken zurück (runtime, distance, turns).
+    Executes all algorithm+scenario combinations and returns 
+    a DataFrame with all metrics. (runtime, distance, turns).
     """
 
     rows: List[Dict[str, Any]] = []
@@ -178,7 +183,6 @@ def run_experiments() -> pd.DataFrame:
         items = scenario["items"]
         checkouts = scenario["checkouts"]
 
-        # Graph nur einmal pro Datei laden
         if graph_path not in graph_cache:
             graph_cache[graph_path] = load_graph(graph_path)
         G = graph_cache[graph_path]
@@ -202,10 +206,8 @@ def run_experiments() -> pd.DataFrame:
             walk = route.get("walk", [])
 
             row: Dict[str, Any] = {
-                # Schlüssel für eindeutige Zeile
                 "setup": f"{scen_name}__{algo_name}",
 
-                # Meta
                 "scenario": scen_name,
                 "graph_path": graph_path,
                 "algorithm_setup": algo_name,
@@ -217,12 +219,10 @@ def run_experiments() -> pd.DataFrame:
                 "n_items": len(items),
                 "n_checkouts": len(checkouts),
 
-                # Metriken aus evaluate_all_criteria
                 "runtime_seconds": float(eval_result["runtime_seconds"]),
                 "distance": float(eval_result["distance"]),
                 "turns": int(eval_result["turns"]),
 
-                # Route-Infos
                 "route_order": " -> ".join(order) if order else "",
                 "walk_length": len(walk),
             }
@@ -231,7 +231,7 @@ def run_experiments() -> pd.DataFrame:
 
     df = pd.DataFrame(rows).set_index("setup")
 
-    # Optionale Spalten-Reihenfolge
+    # optional column order
     preferred_order = [
         "scenario",
         "algorithm_setup",
@@ -261,7 +261,7 @@ def run_experiments() -> pd.DataFrame:
 
 
 # ---------------------------------------------------------
-# 2) Scaling Benchmark – optional: Skalierung nach Item-Anzahl
+# 2) Scaling Benchmark – optional: scaling by number of items
 # ---------------------------------------------------------
 
 def run_scaling_experiments(
@@ -270,13 +270,13 @@ def run_scaling_experiments(
     repeats: int = 3,
 ) -> pd.DataFrame:
     """
-    Misst Laufzeit-Skalierung für ein Szenario, indem die Anzahl der Items variiert wird.
-    Es wird eine Teilmenge der Items des gewählten Szenarios verwendet.
+    Measures runtime scaling for a scenario by varying the number of items.
+    A subset of the items from the selected scenario is used.
     """
 
     base_scenarios = {s["name"]: s for s in SCENARIOS}
     if scenario_name not in base_scenarios:
-        raise ValueError(f"Szenario '{scenario_name}' nicht in SCENARIOS definiert.")
+        raise ValueError(f"Szenario '{scenario_name}' not defined in SCENARIOS.")
 
     base_scen = base_scenarios[scenario_name]
     graph_path = base_scen["graph_path"]
@@ -289,12 +289,9 @@ def run_scaling_experiments(
     rows: List[Dict[str, Any]] = []
 
     for n in n_items_list:
-        # Begrenzung: nicht mehr Items als im Szenario existieren
         n_eff = min(n, len(base_items))
 
         for run_id in range(repeats):
-            # einfache Variante: deterministische ersten n_eff Items
-            # (wenn du Randomisierung willst → random.sample mit seed)
             items = base_items[:n_eff]
 
             for cfg in CONFIGS:
@@ -328,7 +325,6 @@ def run_scaling_experiments(
 
 
 if __name__ == "__main__":
-    # Einfacher manueller Run
     df = run_experiments()
     with pd.option_context("display.max_columns", None, "display.width", 180):
         print("\n=== Algorithm Comparison (Routing) ===\n")

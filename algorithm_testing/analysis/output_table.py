@@ -62,7 +62,7 @@ def main() -> None:
     # algo_root = algorithm_testing
     algo_root = analysis_dir.parent
 
-    # Ziel: algorithm_testing/analysis_output/output_table_results
+    # Goal: algorithm_testing/analysis_output/output_table_results
     out_dir = algo_root / "analysis_output" / "output_table_results"
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -70,10 +70,10 @@ def main() -> None:
     png_path = out_dir / "routing_table.png"
 
     df.to_csv(csv_path)
-    print(f"CSV gespeichert: {csv_path}")
+    print(f"CSV saved as: {csv_path}")
 
     save_table_as_image(df, filename=str(png_path))
-    print(f"PNG-Tabelle gespeichert: {png_path}")
+    print(f"table saved as: {png_path}")
 
 
 if __name__ == "__main__":
