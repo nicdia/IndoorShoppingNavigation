@@ -413,17 +413,17 @@ function buildStraightRunInstruction(
   const leftSummary = summarizeSide("left", edges, totalDistance);
   const rightSummary = summarizeSide("right", edges, totalDistance);
 
-  // Symmetrischer Gang (Regale auf beiden Seiten)
+  // Symmetric aisle (shelves on both sides)
   if (isSymmetricAisle(leftSummary, rightSummary)) {
     const shelfCount = Math.min(leftSummary.shelves.length, rightSummary.shelves.length);
     const distanceMeters = totalDistance > 0 ? totalDistance : fallbackDistance;
     
     if (shelfCount >= 2) {
-      // An mehreren Regalen vorbei im Gang
+      // Passing multiple shelves in the aisle
       return `Continue down the aisle for ${formatMeters(distanceMeters)} m, passing ${shelfCount} shelves`;
     }
     if (shelfCount === 1) {
-      // Bei einem einzelnen Regal und Abbiegung: "Continue for Xm, then leave the aisle to the left/right"
+      // Single shelf with upcoming turn: describe aisle exit direction
       if (nextTurn === "left" || nextTurn === "right") {
         return `Continue for ${formatMeters(distanceMeters)} m, then leave the aisle to the ${nextTurn}`;
       }
@@ -438,7 +438,7 @@ function buildStraightRunInstruction(
     return null;
   }
 
-  // Nur auf einer Seite Regale oder asymmetrisch
+  // Shelves on one side only, or asymmetric layout
   const bestSummary = chooseSideSummary(leftSummary, rightSummary);
 
   if (!bestSummary) {
@@ -543,22 +543,6 @@ function isSymmetricAisle(left: SideSummary, right: SideSummary): boolean {
     return false;
   }
   return true;
-}
-
-function formatShelfSequence(ids: string[]): string {
-  const unique = ids.filter((value, index) => ids.indexOf(value) === index);
-  if (unique.length === 0) {
-    return "";
-  }
-  if (unique.length === 1) {
-    return unique[0];
-  }
-  if (unique.length === 2) {
-    return `${unique[0]} and ${unique[1]}`;
-  }
-  const initial = unique.slice(0, -1).join(", ");
-  const last = unique[unique.length - 1];
-  return `${initial}, and ${last}`;
 }
 
 function findNextOccurrence(path: RouteNode[], targetNodeId: string, startIndex: number) {

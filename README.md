@@ -2,7 +2,7 @@
 
 Indoor navigation prototype developed within the **Location Based Services** master course.
 
-Indoor Shopping Navigation is a prototype for routing shoppers through an indoor store layout. The project consists of a **FastAPI backend** for route calculation and product data, and a **React frontend (Vite + TypeScript)** for visualizing the floor plan, route, and shopping list. A SQLite database was configured as well as a separate, independent algorithm evaluation pipeline to determine the best algorithm for the backend.
+Indoor Shopping Navigation is a prototype for routing shoppers through an indoor store layout. The project consists of a **Flask backend** for route calculation and product data, and a **React frontend (Vite + TypeScript)** for visualizing the floor plan, route, and shopping list. A SQLite database was configured as well as a separate, independent algorithm evaluation pipeline to determine the best algorithm for the backend.
 
 ---
 
@@ -22,8 +22,8 @@ The following commands are for **Windows PowerShell**. Adjust paths as needed.
 - [Architecture](#architecture)
 - [Repository layout](#repository-layout)
 - [Getting started](#getting-started)
-  - [Backend (FastAPI)](#backend-fastapi)
-  - [Frontend (React--Vite)](#frontend-react--vite)
+  - [Backend (Flask)](#backend-flask)
+  - [Frontend (React + Vite)](#frontend-react--vite)
 - [Configuration](#configuration)
 - [Development workflow (best practices)](#development-workflow-best-practices)
 - [Testing](#testing)
@@ -44,7 +44,7 @@ The following commands are for **Windows PowerShell**. Adjust paths as needed.
 ## Architecture
 
 - **Backend**
-  - FastAPI application located in `app/server/`
+  - Flask application located in `app/server/`
   - Endpoints:
     - `GET /api/health`
     - `GET /products`
@@ -53,29 +53,13 @@ The following commands are for **Windows PowerShell**. Adjust paths as needed.
 - **Frontend**
   - React application using Vite and TypeScript in `app/frontend/`
   - Uses layout data from `app/frontend/public/layout.json`
-  - Reads API base URL from environment variables
+  - API base URL defaults to `http://127.0.0.1:8000` (overridable via `VITE_API_BASE_URL`)
 
 - **Database**
-  - SQLite database file `indoor_shopping_nav.db` by default
+  - SQLite database file `indoor_shopping_nav.db` at the repository root
 
 - **Algorithm experiments**
-  - Located in `algorithm_testing/`
-
----
-
-## Repository Layout
-
-## Architecture
-
-- **Backend**: FastAPI application located in `app/server/`
-  - `GET /api/health` – health checks
-  - `GET /products` – product metadata
-  - `POST /route` – optimized route calculation
-- **Frontend**: React (Vite + TypeScript) located in `app/frontend/`
-  - Uses layout data from `app/frontend/public/layout.json`
-  - Reads API base URL from environment configuration
-- **Database**: SQLite database file at the repository root (`indoor_shopping_nav.db`) by default
-- **Algorithm experiments**: Prototypes and benchmarking in `algorithm_testing/`
+  - Prototypes and benchmarking in `algorithm_testing/`
 
 ---
 
@@ -84,7 +68,7 @@ The following commands are for **Windows PowerShell**. Adjust paths as needed.
 ```
 app/
   frontend/          # React + Vite app
-  server/            # FastAPI backend
+  server/            # Flask backend
   database/          # Database-related resources
 resources/           # Supporting assets
 algorithm_testing/   # Algorithm experiments + benchmarks
@@ -94,7 +78,7 @@ algorithm_testing/   # Algorithm experiments + benchmarks
 
 ## Getting Started
 
-### Backend (FastAPI)
+### Backend (Flask)
 
 1. Change into the backend folder:
 
@@ -109,22 +93,19 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
-3. Install dependencies:
+3. Install dependencies (the `requirements.txt` is in the repository root):
 
 ```powershell
-pip install -r requirements.txt
+pip install -r ..\..\requirements.txt
 ```
 
 4. Start the server:
 
 ```powershell
-uvicorn app:app --reload --host 127.0.0.1 --port 8000
+python app.py
 ```
 
-The API is available at:
-
-- http://127.0.0.1:8000  
-- Swagger documentation at http://127.0.0.1:8000/docs
+The API is available at http://127.0.0.1:8000 by default (set `PORT` in a `.env` file to change).
 
 ---
 
@@ -160,38 +141,28 @@ Start backend and frontend in separate terminals.
 
 | Setting | Purpose | Default |
 |--------|--------|--------|
-| `PORT` | API server port | `8000` |
+| `PORT` | API server port | `3001` |
 | `DB_PATH` | SQLite file path | `<repo>/indoor_shopping_nav.db` |
 | `VITE_API_BASE_URL` | Frontend API base URL | `http://127.0.0.1:8000` |
 
-### Frontend Environment File
+### Backend Environment File (optional)
 
-Create a file at:
-
-```
-app/frontend/.env
-```
-
-With the following content:
-
-```
-VITE_API_BASE_URL=http://127.0.0.1:8000
-```
-
-### Backend Environment File
-
-Create a file at:
+The backend reads a `.env` file in `app/server/` via `python-dotenv`.  
+Create the file only if you need to override defaults:
 
 ```
 app/server/.env
 ```
 
-With the following content:
+Example content:
 
 ```
 PORT=8000
 DB_PATH=/absolute/path/to/indoor_shopping_nav.db
 ```
+
+<!-- > **Note:** The frontend does not require a `.env` file. It falls back to  
+> `http://127.0.0.1:8000` when `VITE_API_BASE_URL` is not set. -->
 
 ---
 
@@ -224,7 +195,7 @@ This file contains polygon and node data for the floor plan. Adjust this file if
 sequenceDiagram
     participant User
     participant Frontend
-    participant API as Backend API (FastAPI)
+    participant API as Backend API (Flask)
     participant Controller as Route Controller
     participant Service as Route Planner Service
 
