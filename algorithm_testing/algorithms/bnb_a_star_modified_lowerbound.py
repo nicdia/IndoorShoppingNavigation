@@ -10,7 +10,7 @@ from typing import Any, Tuple
 # A* IMPLEMENTATION
 # -------------------------------------------------------------
 def _node_coord(graph: nx.Graph, node: Any) -> Tuple[float, float] | None:
-    """Liest (x, y)-Koordinaten eines Knotens, falls vorhanden."""
+    """Reads (x, y) coordinates of a node, if available."""
     data = graph.nodes[node]
     if "x" in data and "y" in data:
         return float(data["x"]), float(data["y"])
@@ -20,7 +20,7 @@ def _node_coord(graph: nx.Graph, node: Any) -> Tuple[float, float] | None:
 
 
 def _heuristic(graph: nx.Graph, u: Any, v: Any) -> float:
-    """Euklidische Heuristik. Falls keine Koordinaten existieren → 0."""
+    """Euclidean heuristic. Returns 0 if coordinates are missing."""
     cu = _node_coord(graph, u)
     cv = _node_coord(graph, v)
     if cu is None or cv is None:
@@ -31,7 +31,7 @@ def _heuristic(graph: nx.Graph, u: Any, v: Any) -> float:
 
 
 def astar(graph: nx.Graph, origin: Any, destination: Any):
-    """Reiner A*-Shortest-Path (Pfad, Distanz)."""
+    """Pure A* shortest path (path, distance)."""
     if origin == destination:
         return [origin], 0.0
 
@@ -60,7 +60,7 @@ def astar(graph: nx.Graph, origin: Any, destination: Any):
     if destination not in g_score:
         return [], math.inf
 
-    # Pfad rekonstruieren
+    # Reconstruct path
     path = []
     cur = destination
     while cur != origin:
@@ -75,7 +75,7 @@ def astar(graph: nx.Graph, origin: Any, destination: Any):
 
 
 # -------------------------------------------------------------
-# Paarweise A*
+# Pairwise A*
 # -------------------------------------------------------------
 def compute_pairwise_astar(G: nx.Graph, relevant: list[str]):
     dist = {u: {} for u in relevant}
@@ -90,10 +90,10 @@ def compute_pairwise_astar(G: nx.Graph, relevant: list[str]):
 
 
 # -------------------------------------------------------------
-# Lower-Bound Berechnung
+# Lower-bound computation
 # -------------------------------------------------------------
 def compute_lower_bound(remaining: list, checkouts: list, dist: dict) -> float:
-    """Summe der minimalen Distanz von jedem remaining-Knoten zu einem anderen remaining oder checkout."""
+    """Sum of the minimum distance from each remaining node to any other remaining or checkout node."""
     if not remaining:
         return 0.0
 
@@ -114,12 +114,12 @@ def compute_lower_bound(remaining: list, checkouts: list, dist: dict) -> float:
 
 
 # -------------------------------------------------------------
-# Branch & Bound mit Lower-Bound Pruning
+# Branch & Bound with Lower-Bound Pruning
 # -------------------------------------------------------------
 def bnb(current, remaining, cost, order_prefix, dist, checkouts, best):
     best_order, best_cost = best
 
-    # Pruning mit Lower-Bound
+    # Pruning with Lower-Bound
     lb = compute_lower_bound(remaining, checkouts, dist)
     if cost + lb >= best_cost:
         return best
@@ -156,7 +156,7 @@ def bnb(current, remaining, cost, order_prefix, dist, checkouts, best):
 # -------------------------------------------------------------
 def run_algorithm(G: nx.Graph, entry: str, items: list[str], checkouts: list[str]):
     """
-    B&B mit A* und Lower-Bound Pruning.
+    B&B with A* and Lower-Bound Pruning.
     """
     relevant = [entry] + items + checkouts
     dist, spath = compute_pairwise_astar(G, relevant)

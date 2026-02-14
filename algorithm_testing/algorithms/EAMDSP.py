@@ -7,12 +7,12 @@ from typing import Any, List, Tuple, Dict
 
 # -------------------------------------------------------------
 # singleSourceSingleDestinationAlgorithm(G, S, T[i])
-# → wir verwenden klassischen Dijkstra
+# using classic Dijkstra
 # -------------------------------------------------------------
 def dijkstra(graph: nx.Graph, origin: Any, destination: Any) -> Tuple[List[Any], float]:
     """
-    Kürzester Pfad zwischen zwei Knoten (Pfad, Distanz).
-    Entspricht singleSourceSingleDestinationAlgorithm im Pseudocode.
+    Shortest path between two nodes (path, distance).
+    Corresponds to singleSourceSingleDestinationAlgorithm in the pseudocode.
     """
     if origin == destination:
         return [origin], 0.0
@@ -40,7 +40,7 @@ def dijkstra(graph: nx.Graph, origin: Any, destination: Any) -> Tuple[List[Any],
     if destination not in dist:
         return [], math.inf
 
-    # Pfad rekonstruieren
+    # Reconstruct path
     path: List[Any] = []
     cur = destination
     while cur != origin:
@@ -54,7 +54,7 @@ def dijkstra(graph: nx.Graph, origin: Any, destination: Any) -> Tuple[List[Any],
 
 
 # -------------------------------------------------------------
-# Direkte Umsetzung des Pseudocodes (Algorithm 3: EAMDSP)
+# Direct implementation of the pseudocode (Algorithm 3: EAMDSP)
 # -------------------------------------------------------------
 def eamdsp_from_pseudocode(
     G: nx.Graph,
@@ -79,33 +79,33 @@ def eamdsp_from_pseudocode(
                     Add L3.col := L2[m].col1
             S := e_Dest_Node
             remove e_Dest_Node from T
-            L1, L2 neu initialisieren
+            reinitialize L1, L2
         Return L3
 
-    Rückgabe:
-        L3: vollständiger Pfad (Knotenfolge) von S über alle Ziele
-        total_distance: Summe der Gewichte entlang L3
+    Returns:
+        L3: complete path (node sequence) from S through all destinations
+        total_distance: sum of weights along L3
     """
-    # Wir machen T veränderbar
+    # Make T mutable
     remaining = list(T)
 
-    L3: List[Any] = []  # finaler Pfad
+    L3: List[Any] = []  # final path
     total_distance = 0.0
     current_S = S
-    first_segment = True  # um doppelte Startknoten zu vermeiden
+    first_segment = True  # avoid duplicate start nodes
 
     while len(remaining) > 0:
         L1: List[Tuple[Any, float]] = []       # (dest, length_path)
-        L2: List[Tuple[Any, Any]] = []         # (node_on_path, dest) für alle Kandidaten
+        L2: List[Tuple[Any, Any]] = []         # (node_on_path, dest) for all candidates
 
         # For (i = 0; i < T.Length; i++)
         for dest in remaining:
             nodes_path, _ = dijkstra(G, current_S, dest)
             if not nodes_path or len(nodes_path) < 2:
-                # Kein Pfad oder trivial – überspringen
+                # No path or trivial, skip
                 continue
 
-            # length_path: Summe der Kanten-Gewichte entlang dieses Pfades
+            # length_path: sum of edge weights along this path
             length_path = 0.0
             for j in range(len(nodes_path) - 1):
                 u = nodes_path[j]
@@ -114,20 +114,20 @@ def eamdsp_from_pseudocode(
                 length_path += w
                 # Add L2->col1 := nodes_path[j], L2->col2 := T[i]
                 L2.append((u, dest))
-            # Letzten Knoten des Pfades noch hinzufügen, damit der Pfad vollständig ist
+            # Add the last node of the path to keep it complete
             L2.append((nodes_path[-1], dest))
 
             # Add L1->col1 := T[i], L1->col2 := length_path
             L1.append((dest, length_path))
 
         if not L1:
-            # keine erreichbaren Ziele
+            # no reachable targets
             return [], math.inf
 
         # L1 sorting according to length_path
         L1.sort(key=lambda x: x[1])
 
-        # e_Dest_Node := L1->col1 (mit minimaler length_path)
+        # e_Dest_Node := L1->col1 (with minimal length_path)
         e_Dest_Node, chosen_length = L1[0]
 
         # For (m = 0; m < L2.Length; m++)
@@ -139,34 +139,34 @@ def eamdsp_from_pseudocode(
         ]
 
         if not segment_nodes:
-            # failsafe: sollte theoretisch nicht passieren
+            # failsafe: should not happen in theory
             return [], math.inf
 
-        # Segment an L3 anhängen
+        # Append segment to L3
         if first_segment:
             L3.extend(segment_nodes)
             first_segment = False
         else:
-            # Ersten Knoten weglassen, falls er identisch mit letztem in L3 ist
+            # Skip first node if identical to last node in L3
             if segment_nodes[0] == L3[-1]:
                 L3.extend(segment_nodes[1:])
             else:
                 L3.extend(segment_nodes)
 
-        # Distanz aufsummieren
+        # Accumulate distance
         total_distance += chosen_length
 
         # S := e_Dest_Node
         current_S = e_Dest_Node
         # Remove the e_Dest_Node value from T
         remaining.remove(e_Dest_Node)
-        # L1, L2 new initialize → erledigt, da wir sie in der Schleife neu anlegen
+        # L1, L2 reinitialized at the start of each loop iteration
 
     return L3, float(total_distance)
 
 
 # -------------------------------------------------------------
-# run_algorithm mit gewohnter Schnittstelle
+# run_algorithm with standard interface
 # -------------------------------------------------------------
 def run_algorithm(
     G: nx.Graph,
@@ -175,17 +175,17 @@ def run_algorithm(
     checkouts: List[str],
 ):
     """
-    Standard-Schnittstelle wie bei deinen anderen Algorithmen.
+    Standard interface matching the other algorithms.
 
-    Strategie:
-      1. EAMDSP (Pseudocode) über alle Items → L3-Path und Distanz.
-      2. Vom letzten Item mit Dijkstra zum nächstgelegenen Checkout.
-      3. "order": [entry] + Item-Reihenfolge + Checkout
-         "walk": kompletter Knoten-Weg (inkl. Checkout-Segment)
+    Strategy:
+      1. EAMDSP (pseudocode) over all items to get the L3 path and distance.
+      2. From the last item, use Dijkstra to reach the nearest checkout.
+      3. "order": [entry] + item order + checkout
+         "walk": complete node path (including checkout segment)
     """
-    # Fall: es gibt Items → Algorithmus 3 auf Items
+    # Case: items present, run Algorithm 3 on items
     if items:
-        # Pfad vom Entry über alle Items (in EAMDSP-Reihenfolge)
+        # Path from entry through all items (in EAMDSP order)
         walk_items, dist_items = eamdsp_from_pseudocode(G, entry, items)
 
         if not walk_items or not math.isfinite(dist_items):
@@ -195,8 +195,8 @@ def run_algorithm(
                 "total_distance": math.inf,
             }
 
-        # Item-Reihenfolge aus dem Pfad extrahieren:
-        # alle Knoten aus 'items' in der Reihenfolge ihres ersten Auftretens
+        # Extract item order from the path:
+        # all nodes from 'items' in their order of first occurrence
         seen = set()
         item_order: List[str] = []
         for node in walk_items:
@@ -205,7 +205,7 @@ def run_algorithm(
                 item_order.append(node)
 
         if not item_order:
-            # Falls der Pfad keine Items enthält (sollte nicht vorkommen)
+            # If the path contains no items (should not happen)
             return {
                 "order": [],
                 "walk": [],
@@ -214,7 +214,7 @@ def run_algorithm(
 
         last_node = item_order[-1]
 
-        # Nächstgelegenen Checkout von diesem letzten Item suchen
+        # Find the nearest checkout from this last item
         best_checkout = None
         best_d = math.inf
         best_path_to_checkout: List[Any] | None = None
@@ -235,10 +235,10 @@ def run_algorithm(
                 "total_distance": math.inf,
             }
 
-        # Gesamtreihenfolge: Entry + Items (in berechneter Reihenfolge) + Checkout
+        # Full order: entry + items (in computed order) + checkout
         full_order = [entry] + item_order + [best_checkout]
 
-        # Gesamt-Walk: EAMDSP-Weg + Checkout-Segment (ohne doppelten Startknoten)
+        # Full walk: EAMDSP path + checkout segment (without duplicate start node)
         walk = list(walk_items)
         if best_path_to_checkout[0] == walk[-1]:
             walk.extend(best_path_to_checkout[1:])
@@ -247,7 +247,7 @@ def run_algorithm(
 
         total_dist = dist_items + best_d
 
-    # Fall: keine Items → direkt zum besten Checkout
+    # Case: no items, go directly to the best checkout
     else:
         best_checkout = None
         best_d = math.inf

@@ -1,7 +1,7 @@
 -- import_products.sql
 PRAGMA foreign_keys = ON;
 
--- Temporäre Staging-Tabelle (exakt wie CSV)
+-- Temporary staging table (matches CSV structure exactly)
 DROP TABLE IF EXISTS products_staging;
 CREATE TABLE products_staging (
   id      INTEGER,
@@ -9,18 +9,18 @@ CREATE TABLE products_staging (
   level   INTEGER
 );
 
--- CSV importieren (Pfad angepasst)
+-- Import CSV (path adjusted)
 .mode csv
 .headers on
 .import resources/id_products.csv products_staging
 
--- In finale Tabelle kopieren
+-- Copy into final table
 INSERT INTO products (product_code, product_name, product_level)
 SELECT id, product, level
 FROM products_staging;
 
--- Aufräumen
+-- Cleanup
 DROP TABLE products_staging;
 
--- Kontrollausgabe
+-- Verification output
 SELECT COUNT(*) AS rows_in_products FROM products;

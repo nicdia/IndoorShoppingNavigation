@@ -12,10 +12,10 @@ Workflow / Structure:
 
 2) Test scenarios (SCENARIOS)
    - Each scenario defines a fixed routing setup on the same graph:
-         * graph_path  → path to the GraphML file
-         * entry       → entry node
-         * items       → list of item nodes that must be visited
-         * checkouts   → possible target / checkout nodes
+         * graph_path  -- path to the GraphML file
+         * entry       -- entry node
+         * items       -- list of item nodes that must be visited
+         * checkouts   -- possible target / checkout nodes
    - The scenarios mainly differ in the number and spatial distribution
      of items (small, medium, large) in order to cover different
      difficulty levels.
@@ -28,7 +28,7 @@ Workflow / Structure:
                - runtime_seconds (runtime, optionally averaged over multiple repetitions)
                - distance        (total distance along the walk)
                - turns           (number of direction changes in the walk)
-               - route_order     (order: Entry → Items → Checkout)
+               - route_order     (order: Entry -> Items -> Checkout)
                - walk_length     (number of nodes in the walk)
    - All results are collected in a DataFrame, where each row corresponds
      to one setup "scenario__algorithm".

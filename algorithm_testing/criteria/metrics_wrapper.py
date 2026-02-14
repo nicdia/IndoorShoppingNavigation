@@ -17,8 +17,8 @@ def evaluate_all_criteria(
     runtime_repeats: int = 1,
 ) -> Dict[str, Any]:
     """
-    Führt alle drei Kriterien im gleichen Setting aus und gibt die Ergebnisse als Dict zurück.
-    Erwartet, dass algorithm_fn folgendes Dict zurückgibt:
+    Runs all three criteria in the same setup and returns the results as a dict.
+    Expects algorithm_fn to return the following dict:
         {
             "order": [...],
             "walk": [...],
@@ -26,22 +26,22 @@ def evaluate_all_criteria(
         }
     """
 
-    # 1) Algorithmus einmal ausführen (für Distanz + Turns)
+    # 1) Run algorithm once (for distance + turns)
     result = algorithm_fn(G, entry, items, checkouts)
 
-    # 2) Distanz berechnen
+    # 2) Compute distance
     dist = distance_score(G, result)
 
-    # 3) Anzahl Abbiegen
+    # 3) Count turns
     turns = count_turns(G, result)
 
-    # 4) Laufzeit separat messen
+    # 4) Measure runtime separately
     runtime_sec = measure_runtime(
         algorithm_fn, G, entry, items, checkouts, repeats=runtime_repeats
     )
 
     return {
-        "route_result": result,       # enthält order, walk, total_distance
+        "route_result": result,       # contains order, walk, total_distance
         "runtime_seconds": runtime_sec,
         "distance": dist,
         "turns": turns,

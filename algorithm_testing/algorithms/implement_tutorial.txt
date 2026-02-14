@@ -1,59 +1,59 @@
 # ============================================================
-#  ALGORITHM BUILDING TUTORIAL (Routing-Testbench)
+#  ALGORITHM BUILDING TUTORIAL (Routing Testbench)
 #  ------------------------------------------------------------
-#  Für alle Devs: So müssen eure Routing-Algorithmen aufgebaut
-#  sein, damit die Metriken automatisch funktionieren.
+#  For all devs: This is how your routing algorithms must be
+#  structured so the metrics work automatically.
 # ============================================================
 
 ===============================================================
-1. WAS EURE FUNKTION ALS INPUT BEKOMMT
+1. INPUT YOUR FUNCTION RECEIVES
 ===============================================================
-Euer Algorithmus MUSS genau diese Signatur haben:
+Your algorithm MUST have exactly this signature:
 
     def run_algorithm(G, entry, items, checkouts):
 
-Parameter:
-- G         : NetworkX-Graph (mit weight auf Kanten, x/y auf Nodes)
-- entry     : Startpunkt (z.B. "21")
-- items     : Liste von Zielknoten (z.B. ["41","61","59"])
-- checkouts : Liste möglicher Endpunkte (z.B. ["14","15"])
+Parameters:
+- G         : NetworkX graph (with weight on edges, x/y on nodes)
+- entry     : Start node (e.g. "21")
+- items     : List of target nodes (e.g. ["41","61","59"])
+- checkouts : List of possible end nodes (e.g. ["14","15"])
 
-Mehr braucht ihr nicht.
+Nothing else is needed.
 
 
 ===============================================================
-2. WAS EURE FUNKTION ALS OUTPUT ZURÜCKGEBEN MUSS
+2. OUTPUT YOUR FUNCTION MUST RETURN
 ===============================================================
-Euer Algorithmus MUSS ein Dict zurückgeben, GENAU SO:
+Your algorithm MUST return a dict, EXACTLY like this:
 
     {
-        "order": [...],          # logische Reihenfolge der Stops
-        "walk": [...],           # komplette Knotenfolge im Graphen
-        "total_distance": float  # Länge des Walks
+        "order": [...],          # logical order of stops
+        "walk": [...],           # complete node sequence in the graph
+        "total_distance": float  # length of the walk
     }
 
 Details:
 
 "order"
-    Die Reihenfolge der wichtigen Punkte:
-    Beispiel: ["21", "41", "61", "59", "14"]
+    The order of important waypoints:
+    Example: ["21", "41", "61", "59", "14"]
 
 "walk"
-    Die vollständige Route im Graphen, inklusive aller Zwischenknoten.
-    Beispiel: ["21","22","23","41","42","61","59","58","14"]
+    The full route in the graph, including all intermediate nodes.
+    Example: ["21","22","23","41","42","61","59","58","14"]
 
 "total_distance"
-    Ein Float, die Distanz entlang des Walks.
+    A float, the distance along the walk.
 
 
 ===============================================================
-3. TEMPLATE FÜR EUCH (COPY/PASTE)
+3. TEMPLATE (COPY/PASTE)
 ===============================================================
-Benutzt dieses Grundgerüst:
+Use this skeleton:
 
     def run_algorithm(G, entry, items, checkouts):
         """
-        MUSS dieses Dict zurückgeben:
+        MUST return this dict:
         {
             "order": [...],
             "walk": [...],
@@ -61,11 +61,11 @@ Benutzt dieses Grundgerüst:
         }
         """
 
-        # TODO: euren Algorithmus implementieren
+        # TODO: implement your algorithm
 
-        # Dummy Beispiel (KEIN richtiger Algorithmus):
+        # Dummy example (NOT a real algorithm):
         order = [entry] + items + [checkouts[0]]
-        walk = order[:]  # für echten Algo: richtige Pfade bauen
+        walk = order[:]  # for a real algo: build proper paths
         total_distance = 0.0
 
         return {
@@ -76,21 +76,21 @@ Benutzt dieses Grundgerüst:
 
 
 ===============================================================
-4. WAS IHR NICHT MACHEN DÜRFT
+4. RULES
 ===============================================================
-❌ Keine Klassen  
-❌ Kein anderes Rückgabeformat  
-❌ Keine Prints  
-❌ Keine Inputs  
-❌ Kein Plotten  
-❌ Keine globalen Abhängigkeiten  
+- No classes
+- No other return format
+- No prints
+- No inputs
+- No plotting
+- No global dependencies
 
-Nur:
-    run_algorithm → Dict zurückgeben
+Only:
+    run_algorithm returns a dict
 
 
 ===============================================================
-5. BEISPIEL: BnB (verkürzt & korrekt formatiert)
+5. EXAMPLE: BnB (shortened, correctly formatted)
 ===============================================================
     def run_algorithm(G, entry, items, checkouts):
         relevant = [entry] + items + checkouts
@@ -115,9 +115,9 @@ Nur:
 
 
 ===============================================================
-6. WARUM DIESE STRUKTUR?
+6. WHY THIS STRUCTURE?
 ===============================================================
-Damit die Testbench automatisch funktioniert:
+So the testbench works automatically:
 
     results = evaluate_all_criteria(
         run_algorithm,
@@ -127,22 +127,22 @@ Damit die Testbench automatisch funktioniert:
         checkouts
     )
 
-Und wir bekommen:
-- Distanz
+And we get:
+- Distance
 - Turns
-- Laufzeit
-- Vergleichbarkeit aller Algorithmen
+- Runtime
+- Comparability across all algorithms
 
 
 ===============================================================
-7. TL;DR FÜR SCHNELLE DEVS
+7. TL;DR
 ===============================================================
-✔ run_algorithm(G, entry, items, checkouts)  
-✔ return {
+- run_algorithm(G, entry, items, checkouts)
+- return {
       "order": [...],
       "walk": [...],
       "total_distance": float
   }
 
-Wenn ihr das einhaltet → läuft alles automatisch.
+If you follow this, everything runs automatically.
 ===============================================================

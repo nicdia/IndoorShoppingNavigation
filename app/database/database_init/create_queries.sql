@@ -19,9 +19,9 @@ CREATE TABLE IF NOT EXISTS edges (
 -- === PRODUCTS ===
 CREATE TABLE IF NOT EXISTS products (
   product_id     INTEGER PRIMARY KEY AUTOINCREMENT,
-  product_code   INTEGER,       -- CSV-Spalte "id"
-  product_name   TEXT NOT NULL, -- CSV-Spalte "product"
-  product_level  INTEGER        -- CSV-Spalte "level"
+  product_code   INTEGER,       -- CSV column "id"
+  product_name   TEXT NOT NULL, -- CSV column "product"
+  product_level  INTEGER        -- CSV column "level"
 );
 
 -- === PRODUCT LOCATIONS ===

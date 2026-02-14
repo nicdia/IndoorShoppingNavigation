@@ -462,16 +462,16 @@ function buildStraightRunInstruction(
   const sideText = bestSummary.side === "left" ? "left" : "right";
   const distanceMeters = totalDistance > 0 ? totalDistance : fallbackDistance;
 
-  // Ein Regal auf der markanten Seite
+  // One shelf on the prominent side
   if (bestSummary.shelves.length === 1) {
-    // Prüfe ob andere Seite auch Regale hat
+    // Check if the other side also has shelves
     if (otherSummary.shelves.length > 0) {
       return `Walk along the shelf on your ${sideText} for ${formatMeters(distanceMeters)} m`;
     }
     return `Follow the shelf on your ${sideText} for ${formatMeters(distanceMeters)} m`;
   }
 
-  // Mehrere Regale auf einer Seite
+  // Multiple shelves on the prominent side
   const shelfCount = bestSummary.shelves.length;
   return `Pass ${shelfCount} shelves on your ${sideText} over the next ${formatMeters(distanceMeters)} m`;
 }

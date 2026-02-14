@@ -7,10 +7,10 @@ from typing import Any, Tuple
 
 
 # -------------------------------------------------------------
-# A* IMPLEMENTATION (ersetzt dijkstra)
+# A* IMPLEMENTATION (replaces Dijkstra)
 # -------------------------------------------------------------
 def _node_coord(graph: nx.Graph, node: Any) -> Tuple[float, float] | None:
-    """Liest (x, y)-Koordinaten eines Knotens, falls vorhanden."""
+    """Reads (x, y) coordinates of a node, if available."""
     data = graph.nodes[node]
     if "x" in data and "y" in data:
         return float(data["x"]), float(data["y"])
@@ -20,7 +20,7 @@ def _node_coord(graph: nx.Graph, node: Any) -> Tuple[float, float] | None:
 
 
 def _heuristic(graph: nx.Graph, u: Any, v: Any) -> float:
-    """Euklidische Heuristik. Falls keine Koordinaten existieren → 0."""
+    """Euclidean heuristic. Returns 0 if coordinates are missing."""
     cu = _node_coord(graph, u)
     cv = _node_coord(graph, v)
     if cu is None or cv is None:
@@ -31,7 +31,7 @@ def _heuristic(graph: nx.Graph, u: Any, v: Any) -> float:
 
 
 def astar(graph: nx.Graph, origin: Any, destination: Any):
-    """Reiner A*-Shortest-Path (Pfad, Distanz)."""
+    """Pure A* shortest path (path, distance)."""
     if origin == destination:
         return [origin], 0.0
 
@@ -60,7 +60,7 @@ def astar(graph: nx.Graph, origin: Any, destination: Any):
     if destination not in g_score:
         return [], math.inf
 
-    # Pfad rekonstruieren
+    # Reconstruct path
     path = []
     cur = destination
     while cur != origin:
@@ -75,7 +75,7 @@ def astar(graph: nx.Graph, origin: Any, destination: Any):
 
 
 # -------------------------------------------------------------
-# Paarweise A* (ersetzt compute_pairwise_dijkstra)
+# Pairwise A* (replaces compute_pairwise_dijkstra)
 # -------------------------------------------------------------
 def compute_pairwise_astar(G: nx.Graph, relevant: list[str]):
     dist = {u: {} for u in relevant}
@@ -90,7 +90,7 @@ def compute_pairwise_astar(G: nx.Graph, relevant: list[str]):
 
 
 # -------------------------------------------------------------
-# Branch & Bound (unverändert, aber aktuell ungenutzt)
+# Branch & Bound (unchanged, currently unused)
 # -------------------------------------------------------------
 def bnb(current, remaining, cost, order_prefix, dist, checkouts, best):
     best_order, best_cost = best
@@ -126,15 +126,15 @@ def bnb(current, remaining, cost, order_prefix, dist, checkouts, best):
 
 
 # -------------------------------------------------------------
-# Nearest Neighbour Heuristik
+# Nearest Neighbour heuristic
 # -------------------------------------------------------------
 def nearest_neighbour(entry: str, items: list[str], dist: dict, checkouts: list[str]):
     """
-    Nearest-Neighbour-Heuristik:
-    - Start bei 'entry'
-    - iterativ das nächstgelegene noch unbesuchte Item wählen
-    - am Ende den nächstgelegenen Checkout wählen
-    Gibt (order, total_cost) zurück.
+    Nearest-Neighbour heuristic:
+    - Start at 'entry'
+    - Iteratively pick the closest unvisited item
+    - Finally pick the closest checkout
+    Returns (order, total_cost).
     """
     order: list[str] = [entry]
     current = entry
@@ -142,7 +142,7 @@ def nearest_neighbour(entry: str, items: list[str], dist: dict, checkouts: list[
     total_cost = 0.0
     infinity = math.inf
 
-    # Items nacheinander per NN anlaufen
+    # Visit items one by one using NN
     while remaining:
         nxt = min(remaining, key=lambda x: dist[current].get(x, infinity))
         d = dist[current].get(nxt, infinity)
@@ -155,7 +155,7 @@ def nearest_neighbour(entry: str, items: list[str], dist: dict, checkouts: list[
         current = nxt
         remaining.remove(nxt)
 
-    # Besten Checkout von der letzten Position wählen
+    # Pick the best checkout from the last position
     best_checkout = None
     best_d = infinity
     for c in checkouts:
@@ -174,12 +174,12 @@ def nearest_neighbour(entry: str, items: list[str], dist: dict, checkouts: list[
 
 
 # -------------------------------------------------------------
-# run_algorithm → identische Schnittstelle, identisches Output-Format
+# run_algorithm: same interface, same output format
 # -------------------------------------------------------------
 def run_algorithm(G: nx.Graph, entry: str, items: list[str], checkouts: list[str]):
     """
-    Wie algorithm_bnb.run_algorithm,
-    aber mit A* als Pfadberechnung und Nearest Neighbour für die Besuchsreihenfolge.
+    Same as algorithm_bnb.run_algorithm,
+    but using A* for pathfinding and Nearest Neighbour for visit order.
     """
     relevant = [entry] + items + checkouts
     dist, spath = compute_pairwise_astar(G, relevant)

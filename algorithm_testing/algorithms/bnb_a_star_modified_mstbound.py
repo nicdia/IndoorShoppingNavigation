@@ -71,7 +71,7 @@ def astar(graph: nx.Graph, origin: Any, destination: Any):
 
 
 # -------------------------------------------------------------
-# Paarweise A*
+# Pairwise A*
 # -------------------------------------------------------------
 def compute_pairwise_astar(G: nx.Graph, relevant: list[str]):
     dist = {u: {} for u in relevant}
@@ -86,84 +86,84 @@ def compute_pairwise_astar(G: nx.Graph, relevant: list[str]):
 
 
 # -------------------------------------------------------------
-# MST-basierter Lower Bound (Prim-Algorithmus)
+# MST-based lower bound (Prim's algorithm)
 # -------------------------------------------------------------
 def compute_mst_cost(nodes: list, dist: dict) -> float:
-    """Berechnet MST-Kosten für eine Knotenmenge."""
+    """Computes MST cost for a set of nodes."""
     if len(nodes) <= 1:
         return 0.0
 
-    im_baum = {nodes[0]}
-    mst_kosten = 0.0
+    in_tree = {nodes[0]}
+    mst_cost = 0.0
 
-    # Füge Knoten hinzu bis alle im Baum sind
-    while len(im_baum) < len(nodes):
-        # Finde kürzeste Kante vom Baum nach außen
-        beste_distanz = math.inf
-        bester_knoten = None
+    # Add nodes until all are in the tree
+    while len(in_tree) < len(nodes):
+        # Find shortest edge from tree to outside
+        best_dist = math.inf
+        best_node = None
         
-        for u in im_baum:
+        for u in in_tree:
             for v in nodes:
-                if v in im_baum:
+                if v in in_tree:
                     continue
                 if u in dist and v in dist[u]:
-                    if dist[u][v] < beste_distanz:
-                        beste_distanz = dist[u][v]
-                        bester_knoten = v
+                    if dist[u][v] < best_dist:
+                        best_dist = dist[u][v]
+                        best_node = v
         
-        if bester_knoten is None:
+        if best_node is None:
             break
             
-        im_baum.add(bester_knoten)
-        mst_kosten += beste_distanz
+        in_tree.add(best_node)
+        mst_cost += best_dist
 
-    return mst_kosten
+    return mst_cost
 
 
 def compute_mst_lower_bound(current, remaining: list, checkouts: list, dist: dict) -> float:
     """
-    MST-basierter Lower Bound:
-    1. min(current → remaining)
+    MST-based lower bound:
+    1. min(current to remaining)
     2. MST(remaining)
-    3. min(remaining → checkout)
+    3. min(remaining to checkout)
     """
     if not remaining:
         return 0.0
 
-    # 1. Kürzeste Distanz zum nächsten remaining
-    min_zu_remaining = math.inf
+    # 1. Shortest distance to nearest remaining
+    min_to_remaining = math.inf
     for r in remaining:
         if current in dist and r in dist[current]:
-            if dist[current][r] < min_zu_remaining:
-                min_zu_remaining = dist[current][r]
+            if dist[current][r] < min_to_remaining:
+                min_to_remaining = dist[current][r]
 
-    if not math.isfinite(min_zu_remaining):
+    if not math.isfinite(min_to_remaining):
         return math.inf
 
-    # 2. MST über remaining
-    mst_kosten = compute_mst_cost(remaining, dist)
+    # 2. MST over remaining
+    mst_cost = compute_mst_cost(remaining, dist)
 
-    # 3. Kürzeste Distanz zur Kasse
-    min_zu_checkout = math.inf
+    # 3. Shortest distance to checkout
+    min_to_checkout = math.inf
     for r in remaining:
         for c in checkouts:
             if r in dist and c in dist[r]:
-                if dist[r][c] < min_zu_checkout:
-                    min_zu_checkout = dist[r][c]
+                if dist[r][c] < min_to_checkout:
+                    min_to_checkout = dist[r][c]
 
-    if not math.isfinite(min_zu_checkout):
+    if not math.isfinite(min_to_checkout):
         return math.inf
 
-    return min_zu_remaining + mst_kosten + min_zu_checkout
+    return min_to_remaining + mst_cost + min_to_checkout
 
 
 # -------------------------------------------------------------
-# Branch & Bound mit MST Lower Bound
+# Branch & Bound with MST Lower Bound
 # -------------------------------------------------------------
 def bnb(current, remaining, cost, order_prefix, dist, checkouts, best):
     best_order, best_cost = best
 
-    # Pruning mit MST Lower Bound
+    # Pruning with MST Lower Bound
     lb = compute_mst_lower_bound(current, remaining, checkouts, dist)
     if cost + lb >= best_cost:
         return best
@@ -200,7 +200,7 @@ def bnb(current, remaining, cost, order_prefix, dist, checkouts, best):
 # -------------------------------------------------------------
 def run_algorithm(G: nx.Graph, entry: str, items: list[str], checkouts: list[str]):
     """
-    B&B mit A* und MST-basiertem Lower Bound.
+    B&B with A* and MST-based Lower Bound.
     """
     relevant = [entry] + items + checkouts
     dist, spath = compute_pairwise_astar(G, relevant)

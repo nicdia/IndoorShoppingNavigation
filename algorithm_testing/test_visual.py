@@ -25,7 +25,7 @@ from criteria.metrics_wrapper import evaluate_all_criteria
 from algorithms.bnb_a_star_modified_mstbound import run_algorithm
 def load_graph(path: str) -> nx.Graph:
     """
-    Lädt den Graphen und stellt sicher, dass jede Kante ein 'weight'-Attribut hat.
+    Loads the graph and ensures that every edge has a 'weight' attribute.
     """
     G = nx.read_graphml(path)
     for u, v, d in G.edges(data=True):
@@ -35,18 +35,18 @@ def load_graph(path: str) -> nx.Graph:
 
 def get_positions(G: nx.Graph):
     """
-    Liefert ein Positions-Dict für die Visualisierung.
-    Falls Knoten 'x'/'y' (oder 'lon'/'lat') besitzen, werden diese genutzt,
-    sonst ein Layout von NetworkX (spring_layout).
+    Returns a position dict for visualization.
+    Uses node attributes 'x'/'y' (or 'lon'/'lat') if available,
+    otherwise falls back to a NetworkX spring layout.
     """
     pos = {}
-    # Versuch: x/y
+    # Try: x/y
     if all(("x" in data and "y" in data) for _, data in G.nodes(data=True)):
         for n, data in G.nodes(data=True):
             pos[n] = (float(data["x"]), float(data["y"]))
         return pos
 
-    # Versuch: lon/lat
+    # Try: lon/lat
     if all(("lon" in data and "lat" in data) for _, data in G.nodes(data=True)):
         for n, data in G.nodes(data=True):
             pos[n] = (float(data["lon"]), float(data["lat"]))
@@ -56,11 +56,11 @@ def get_positions(G: nx.Graph):
     return nx.spring_layout(G, seed=42)
 
 
-def visualize_route(G, pos, ENTRY, items, CHECKOUTS, walk, title="Route über Kanten",
+def visualize_route(G, pos, ENTRY, items, CHECKOUTS, walk, title="Route on edges",
                     runtime=None, distance=None, turns=None):
     plt.figure(figsize=(12, 9))
 
-    # Gesamter Graph
+    # Full graph
     nx.draw(
         G, pos,
         node_color="#e0e0e0",
@@ -70,7 +70,7 @@ def visualize_route(G, pos, ENTRY, items, CHECKOUTS, walk, title="Route über Ka
         font_size=7,
     )
 
-    # Hervorheben
+    # Highlight special nodes
     nx.draw_networkx_nodes(G, pos, nodelist=[ENTRY],     node_color="green", label="Entry",     node_size=300)
     nx.draw_networkx_nodes(G, pos, nodelist=items,       node_color="orange", label="Items",    node_size=300)
     nx.draw_networkx_nodes(G, pos, nodelist=CHECKOUTS,   node_color="red",    label="Checkouts",node_size=300)
@@ -84,24 +84,24 @@ def visualize_route(G, pos, ENTRY, items, CHECKOUTS, walk, title="Route über Ka
     plt.title(title)
 
     # ============================
-    #   INFOBOX (oben rechts)
+    #   INFO BOX (top left)
     # ============================
     info_lines = []
 
     if runtime is not None:
-        info_lines.append(f"Laufzeit: {runtime:.4f} s")
+        info_lines.append(f"Runtime: {runtime:.4f} s")
 
     if distance is not None:
-        info_lines.append(f"Distanz:  {distance:.2f}")
+        info_lines.append(f"Distance: {distance:.2f}")
 
     if turns is not None:
-        info_lines.append(f"Abbiegen: {turns}")
+        info_lines.append(f"Turns: {turns}")
 
     if info_lines:
         txt = "\n".join(info_lines)
 
         plt.text(
-            0.01, 0.99,                # Position (relativ zum Plotbereich)
+            0.01, 0.99,                # Position (relative to the plot area)
             txt,
             transform=plt.gca().transAxes,
             fontsize=10,
@@ -119,42 +119,42 @@ def visualize_route(G, pos, ENTRY, items, CHECKOUTS, walk, title="Route über Ka
 
 
 if __name__ == "__main__":
-    # --- Standard-Testsetting für alle Algorithmen ---
+    # --- Default test setup for all algorithms ---
     GRAPH_PATH = "resources/graph.graphml"
 
     ENTRY = "21"
     CHECKOUTS = ["14", "15"]
-    # Fixe Itemliste, damit Algorithmen vergleichbar sind
-    ITEMS = ["41", "61", "59", "78", "86", "112", "143", "3", "149", "135", "139"]  # Beispiel-IDs, anpassen wie gewünscht
+    # Fixed item list so algorithms are comparable
+    ITEMS = ["41", "61", "59", "78", "86", "112", "143", "3", "149", "135", "139"]  # example IDs, adjust as needed
 
-    # Graph laden
+    # Load graph
     G = load_graph(GRAPH_PATH)
 
-    # Alle Metriken auf den Algorithmus laufen lassen
+    # Run all metrics for the algorithm
     results = evaluate_all_criteria(
         algorithm_fn=run_algorithm,
         G=G,
         entry=ENTRY,
         items=ITEMS,
         checkouts=CHECKOUTS,
-        runtime_repeats=5,  # mehrere Runs für stabilere Laufzeit
+        runtime_repeats=5,  # multiple runs for stable runtime measurement
     )
 
     route = results["route_result"]
 
-    print("=== Algorithmus-Bewertung (BnB/NN/A*) ===")
+    print("=== Algorithm Evaluation ===")
     print(f"Entry:       {ENTRY}")
     print(f"Items:       {ITEMS}")
     print(f"Checkouts:   {CHECKOUTS}")
     print()
-    print(f"Laufzeit (s):        {results['runtime_seconds']:.6f}")
-    print(f"Distanz (Gewicht):   {results['distance']:.2f}")
-    print(f"Anzahl Abbiegen:     {results['turns']}")
+    print(f"Runtime (s):    {results['runtime_seconds']:.6f}")
+    print(f"Distance:       {results['distance']:.2f}")
+    print(f"No. of Turns:   {results['turns']}")
     print()
-    print("Route-Order: ", " -> ".join(route["order"]))
-    print("Walk-Länge:  ", len(route["walk"]), "Knoten")
+    print("Route order: ", " -> ".join(route["order"]))
+    print("Walk length: ", len(route["walk"]), "nodes")
 
-    # Visualisierung
+    # Visualization
     pos = get_positions(G)
     visualize_route(
         G,
@@ -163,7 +163,7 @@ if __name__ == "__main__":
         items=ITEMS,
         CHECKOUTS=CHECKOUTS,
         walk=route["walk"],
-        title="Gefundene Route",
+        title="Computed Route",
         runtime=results["runtime_seconds"],
         distance=results["distance"],
         turns=results["turns"],

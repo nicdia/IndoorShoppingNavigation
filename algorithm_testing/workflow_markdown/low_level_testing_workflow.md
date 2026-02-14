@@ -13,7 +13,7 @@ subgraph Benchmark[Algorithm Benchmark Flow]
     %% Quality Benchmark: run_experiments()
     B_RunExp["run_experiments() over all (scenario × algorithm)"]
     B_LoadGraph["Load GraphML and ensure each edge has a 'weight' attribute"]
-    B_Eval["evaluate_all_criteria() → runtime_seconds, distance, turns, route (order, walk)"]
+    B_Eval["evaluate_all_criteria() -> runtime_seconds, distance, turns, route (order, walk)"]
     B_Row["Build metrics row for each setup = scenario__algorithm"]
     B_DF["Benchmark DataFrame (indexed by setup)"]
 
@@ -49,7 +49,7 @@ subgraph CriteriaDiagrams[Criteria Diagrams Flow]
     C_Plot["Generate bar chart PNG for each category (absolute values per algorithm)"]
 end
 
-%% Connect Benchmark → Criteria Diagrams
+%% Connect Benchmark -> Criteria Diagrams
 B_DF --> C_InDF
 C_Start --> C_InDF
 C_InDF --> C_RawCSV
@@ -73,15 +73,15 @@ subgraph Heatmap[Heatmap Flow]
     H_PerSetup["Assemble per_setup_index: scenario, algorithm, normalized metrics, overall_score"]
 
     %% Step 2: Aggregate across scenarios
-    H_PerAlgo["Group per_setup_index by algorithm_setup and average normalized scores → per_algorithm_index"]
+    H_PerAlgo["Group per_setup_index by algorithm_setup and average normalized scores -> per_algorithm_index"]
 
     %% Step 3: Export & Visualization
-    H_SetupCSV["Save per_setup_index → heatmap_index_per_setup.csv"]
-    H_AlgoCSV["Save per_algorithm_index → heatmap_index_per_algorithm.csv"]
+    H_SetupCSV["Save per_setup_index -> heatmap_index_per_setup.csv"]
+    H_AlgoCSV["Save per_algorithm_index -> heatmap_index_per_algorithm.csv"]
     H_SavePNG["Render per_algorithm_index as heatmap_index_per_algorithm.png (rows = algorithms, columns = categories)"]
 end
 
-%% Connect Benchmark → Heatmap
+%% Connect Benchmark -> Heatmap
 B_DF --> H_InDF
 H_Start --> H_InDF
 H_InDF --> H_GroupScenario

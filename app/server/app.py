@@ -13,10 +13,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]  # .../<repo-root>/
 DEFAULT_DB_PATH = PROJECT_ROOT / "indoor_shopping_nav.db"
 DB_PATH = os.environ.get("DB_PATH", str(DEFAULT_DB_PATH))
 
-print("📁 Verwende Datenbank:", Path(DB_PATH).expanduser().resolve())
+print("Using database:", Path(DB_PATH).expanduser().resolve())
 
 app = Flask(__name__)
-# ✅ CORS: erlaube Requests vom Frontend-Port 8000
+# CORS: allow requests from the frontend port
 CORS(
     app,
     resources={r"/*": {"origins": [
@@ -25,7 +25,7 @@ CORS(
     allow_headers=["Content-Type"],
     methods=["GET", "POST", "OPTIONS"],
 )
-# Optional: Kein 308 Redirect bei fehlendem Slash
+# Optional: no 308 redirect on missing trailing slash
 app.url_map.strict_slashes = False
 PORT = int(os.environ.get("PORT", 3001))
 
@@ -45,7 +45,7 @@ def _close_db(exception):
 
 @app.route("/api/dbtest")
 def db_test():
-    """Testet, ob die View v_product_map lesbar ist"""
+    """Tests whether the view v_product_map is readable"""
     from db.db import fetch_product_nodes_by_names
     rows = fetch_product_nodes_by_names(["Kiwi", "Apple", "Banana"])
     return {"rows": rows}
@@ -61,10 +61,10 @@ def list_products():
 
 
 
-# Blueprint mit allen Routing-Funktionen registrieren
+# Register blueprint with all routing functions
 app.register_blueprint(route_bp, url_prefix="/route")
 
 
 if __name__ == "__main__":
-    print(f"✅ Server läuft unter http://localhost:{PORT}")
+    print(f"Server running at http://localhost:{PORT}")
     app.run(host="0.0.0.0", port=PORT, debug=True) 

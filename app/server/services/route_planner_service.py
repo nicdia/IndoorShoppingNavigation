@@ -14,8 +14,8 @@ from db.db import fetch_edges, fetch_product_nodes_by_names, fetch_node_coordina
 _GRAPH: Optional[nx.DiGraph] = None
 _SHELF_SEGMENTS: Optional[Dict[Tuple[str, str], Dict[str, Optional[str]]]] = None
 
-_ENTRY_COORDS_LOADED: bool = False  # print-diagnose: nur einmal loggen
-_ASTARP_CACHE_DIAG_PRINTED: bool = False  # print-diagnose: nur einmal loggen
+_ENTRY_COORDS_LOADED: bool = False  # print diagnostics: log only once
+_ASTARP_CACHE_DIAG_PRINTED: bool = False  # print diagnostics: log only once
 
 ENTRY_NODE_ID = os.environ.get("ENTRY_NODE_ID", "21").strip() or None
 _CHECKOUT_RAW = os.environ.get("CHECKOUT_NODE_IDS", "14,15")
@@ -95,9 +95,9 @@ def _resolve_edge_shelves(
 
 def get_graph() -> nx.DiGraph:
     """
-    Gerichteter Graph aus edges:
-    - edge_bidirectional = 1 → beide Richtungen
-    - edge_bidirectional = 0/NULL → nur source→target
+    Directed graph from edges:
+    - edge_bidirectional = 1: both directions
+    - edge_bidirectional = 0/NULL: only source to target
     """
     global _GRAPH
     if _GRAPH is None:
@@ -120,7 +120,7 @@ def _euclid(a: Dict[str, Any], b: Dict[str, Any]) -> float:
 
 
 def plan_route_by_names(product_names: List[str], start_node_id: Optional[str] = None) -> Dict[str, Any]:
-    """Plane eine Route, die beim gewählten Startknoten beginnt und an einer Kasse endet."""
+    """Plans a route starting at the chosen start node and ending at a checkout."""
     rows = fetch_product_nodes_by_names(product_names)
     products: List[Dict[str, Any]] = []
     for r in rows:
@@ -132,7 +132,7 @@ def plan_route_by_names(product_names: List[str], start_node_id: Optional[str] =
             "node_y": float(r["node_y"]),
         })
 
-    # Map: node_id -> Produkt / Knoten Infos
+    # Map: node_id to product / node info
     node_info: Dict[str, Dict[str, Any]] = {p["node_id"]: dict(p) for p in products}
 
     entry_override = None
@@ -181,7 +181,7 @@ def plan_route_by_names(product_names: List[str], start_node_id: Optional[str] =
             )
 
     if not route_nodes:
-        # Fallback: verwende Produkte in Eingabereihenfolge und hänge erste Kasse an
+        # Fallback: use products in input order and append first checkout
         fallback_nodes = []
         if entry_node:
             fallback_nodes.append(entry_node)
@@ -194,7 +194,7 @@ def plan_route_by_names(product_names: List[str], start_node_id: Optional[str] =
         route_nodes, path_cache, dist_cache, node_info
     )
 
-    # Produkte in Besuchsreihenfolge
+    # Products in visit order
     node_to_products: Dict[str, List[Dict[str, Any]]] = {}
     for p in products:
         node_to_products.setdefault(p["node_id"], []).append({

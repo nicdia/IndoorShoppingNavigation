@@ -5,7 +5,7 @@ import networkx as nx
 
 def _angle_between(p1, p2, p3) -> float:
     """
-    Winkel zwischen Vektor (p1→p2) und (p2→p3) in Grad.
+    Angle between vector (p1 to p2) and (p2 to p3) in degrees.
     """
     v1 = (p2[0] - p1[0], p2[1] - p1[1])
     v2 = (p3[0] - p2[0], p3[1] - p2[1])
@@ -22,8 +22,8 @@ def _angle_between(p1, p2, p3) -> float:
 
 def count_turns(G: nx.Graph, result: dict, angle_threshold: float = 45.0) -> int:
     """
-    Zählt, wie oft der Walk in 'result' abbiegt.
-    Turn = Winkel >= angle_threshold.
+    Counts how many turns occur in the walk from 'result'.
+    A turn is counted when the angle >= angle_threshold.
     """
     walk = result.get("walk", [])
     if len(walk) < 3:
@@ -36,7 +36,7 @@ def count_turns(G: nx.Graph, result: dict, angle_threshold: float = 45.0) -> int
             p2 = (float(G.nodes[b]["x"]), float(G.nodes[b]["y"]))
             p3 = (float(G.nodes[c]["x"]), float(G.nodes[c]["y"]))
         except KeyError:
-            # wenn keine Koordinaten vorhanden sind: skip
+            # skip if node coordinates are missing
             continue
 
         angle = _angle_between(p1, p2, p3)

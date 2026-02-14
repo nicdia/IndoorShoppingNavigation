@@ -7,10 +7,10 @@ from typing import Any, Tuple
 
 
 # -------------------------------------------------------------
-# A* IMPLEMENTATION (ersetzt dijkstra)
+# A* IMPLEMENTATION (replaces Dijkstra)
 # -------------------------------------------------------------
 def _node_coord(graph: nx.Graph, node: Any) -> Tuple[float, float] | None:
-    """Liest (x, y)-Koordinaten eines Knotens, falls vorhanden."""
+    """Reads (x, y) coordinates of a node, if available."""
     data = graph.nodes[node]
     if "x" in data and "y" in data:
         return float(data["x"]), float(data["y"])
@@ -20,7 +20,7 @@ def _node_coord(graph: nx.Graph, node: Any) -> Tuple[float, float] | None:
 
 
 def _heuristic(graph: nx.Graph, u: Any, v: Any) -> float:
-    """Euklidische Heuristik. Falls keine Koordinaten existieren → 0."""
+    """Euclidean heuristic. Returns 0 if coordinates are missing."""
     cu = _node_coord(graph, u)
     cv = _node_coord(graph, v)
     if cu is None or cv is None:
@@ -31,7 +31,7 @@ def _heuristic(graph: nx.Graph, u: Any, v: Any) -> float:
 
 
 def astar(graph: nx.Graph, origin: Any, destination: Any):
-    """Reiner A*-Shortest-Path (Pfad, Distanz)."""
+    """Pure A* shortest path (path, distance)."""
     if origin == destination:
         return [origin], 0.0
 
@@ -60,7 +60,7 @@ def astar(graph: nx.Graph, origin: Any, destination: Any):
     if destination not in g_score:
         return [], math.inf
 
-    # Pfad rekonstruieren
+    # Reconstruct path
     path = []
     cur = destination
     while cur != origin:
@@ -75,7 +75,7 @@ def astar(graph: nx.Graph, origin: Any, destination: Any):
 
 
 # -------------------------------------------------------------
-# Paarweise A* (ersetzt compute_pairwise_dijkstra)
+# Pairwise A* (replaces compute_pairwise_dijkstra)
 # -------------------------------------------------------------
 def compute_pairwise_astar(G: nx.Graph, relevant: list[str]):
     dist = {u: {} for u in relevant}
@@ -90,7 +90,7 @@ def compute_pairwise_astar(G: nx.Graph, relevant: list[str]):
 
 
 # -------------------------------------------------------------
-# Branch & Bound (unverändert aus algorithm_bnb.py)
+# Branch & Bound (unchanged from algorithm_bnb.py)
 # -------------------------------------------------------------
 def bnb(current, remaining, cost, order_prefix, dist, checkouts, best):
     best_order, best_cost = best
@@ -126,12 +126,12 @@ def bnb(current, remaining, cost, order_prefix, dist, checkouts, best):
 
 
 # -------------------------------------------------------------
-# run_algorithm → identische Schnittstelle, identisches Output-Format
+# run_algorithm: same interface, same output format
 # -------------------------------------------------------------
 def run_algorithm(G: nx.Graph, entry: str, items: list[str], checkouts: list[str]):
     """
-    Wie algorithm_bnb.run_algorithm,
-    aber mit A* als Pfadberechnung.
+    Same as algorithm_bnb.run_algorithm,
+    but using A* for pathfinding.
     """
     relevant = [entry] + items + checkouts
     dist, spath = compute_pairwise_astar(G, relevant)

@@ -352,7 +352,7 @@ function App() {
     const segmentCount = Array.isArray(routeData?.segments) ? routeData.segments.length : 0;
 
     // Track product node count to correctly assign segment indices.
-    // Segments are: [Start→Product1, Product1→Product2, ..., ProductN→Checkout]
+    // Segments are: [Start->Product1, Product1->Product2, ..., ProductN->Checkout]
     // The first product node gets segment 0, second product node gets segment 1, etc.
     let productNodeCounter = 0;
 

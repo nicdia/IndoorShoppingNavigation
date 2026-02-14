@@ -1,8 +1,8 @@
 """
 Generates comparison diagrams for the three evaluation dimensions of the routing benchmark:
-    - Shortest_Distance   → distance
-    - Few_Turns           → turns
-    - Runtime             → runtime_seconds
+    - Shortest_Distance   -- distance
+    - Few_Turns           -- turns
+    - Runtime             -- runtime_seconds
 
 Workflow:
 
@@ -20,9 +20,9 @@ Workflow:
    Result: criteria_metrics_per_algorithm.csv
 
 4) For each of the three categories, a bar chart is generated:
-       - Shortest_Distance → distance
-       - Few_Turns         → turns
-       - Runtime           → runtime_seconds
+       - Shortest_Distance -- distance
+       - Few_Turns         -- turns
+       - Runtime           -- runtime_seconds
 
    These diagrams visualize absolute performance differences
    (in contrast to the heatmap, which shows normalized scores).

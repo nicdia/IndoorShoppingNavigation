@@ -1,7 +1,7 @@
 # precompute_astar_distances.py
 """
-Berechnet paarweise A*-Distanzen für alle Produktknoten, Entry und Checkouts.
-Speichert das Ergebnis in einer CSV-Datei.
+Computes pairwise A* distances for all product nodes, entry, and checkouts.
+Saves the result to a CSV file.
 """
 import math
 import heapq
@@ -77,10 +77,10 @@ def astar(graph: nx.Graph, origin: Any, destination: Any):
 
 
 # -------------------------------------------------------------
-# Precompute und Speichern
+# Precompute and save
 # -------------------------------------------------------------
 def load_product_nodes(csv_path: str) -> list[str]:
-    """Lädt alle einzigartigen Produkt-Node-IDs aus der CSV."""
+    """Loads all unique product node IDs from the CSV."""
     nodes = set()
     with open(csv_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -90,7 +90,7 @@ def load_product_nodes(csv_path: str) -> list[str]:
 
 
 def precompute_all_distances(G: nx.Graph, nodes: list[str]) -> dict:
-    """Berechnet paarweise A*-Distanzen für alle Knoten."""
+    """Computes pairwise A* distances for all nodes."""
     dist = {}
     total = len(nodes) * (len(nodes) - 1)
     count = 0
@@ -102,24 +102,24 @@ def precompute_all_distances(G: nx.Graph, nodes: list[str]) -> dict:
         dist[u][v] = d
         count += 1
         if count % 1000 == 0:
-            print(f"  {count}/{total} Paare berechnet...")
+            print(f"  {count}/{total} pairs computed...")
 
     return dist
 
 
 def save_distances_csv(dist: dict, output_path: str):
-    """Speichert Distanzmatrix als CSV (from, to, distance)."""
+    """Saves distance matrix as CSV (from, to, distance)."""
     with open(output_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["from", "to", "distance"])
         for u in dist:
             for v in dist[u]:
                 writer.writerow([u, v, dist[u][v]])
-    print(f"Distanzen gespeichert: {output_path}")
+    print(f"Distances saved: {output_path}")
 
 
 def load_distances_csv(csv_path: str) -> dict:
-    """Lädt Distanzmatrix aus CSV."""
+    """Loads distance matrix from CSV."""
     dist = {}
     with open(csv_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -140,34 +140,34 @@ def main():
     import sys
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-    # Pfade
+    # Paths
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     graph_path = os.path.join(base_dir, "..", "resources", "graph.graphml")
     products_csv = os.path.join(base_dir, "..", "resources", "id_products.csv")
     output_csv = os.path.join(os.path.dirname(os.path.abspath(__file__)), "precomputed_distances.csv")
 
-    # Graph laden
-    print("Lade Graph...")
+    # Load graph
+    print("Loading graph...")
     G = nx.read_graphml(graph_path)
 
-    # Produktknoten laden
-    print("Lade Produktknoten...")
+    # Load product nodes
+    print("Loading product nodes...")
     product_nodes = load_product_nodes(products_csv)
 
-    # Entry und Checkout hinzufügen (anpassen falls andere IDs)
+    # Add entry and checkout (adjust IDs if needed)
     entry = "1"
     checkouts = ["2"]
 
     all_nodes = list(set([entry] + product_nodes + checkouts))
-    print(f"Anzahl relevanter Knoten: {len(all_nodes)}")
+    print(f"Number of relevant nodes: {len(all_nodes)}")
 
-    # Distanzen berechnen
-    print("Berechne paarweise A*-Distanzen...")
+    # Compute distances
+    print("Computing pairwise A* distances...")
     dist = precompute_all_distances(G, all_nodes)
 
-    # Speichern
+    # Save
     save_distances_csv(dist, output_csv)
-    print("Fertig!")
+    print("Done!")
 
 
 if __name__ == "__main__":

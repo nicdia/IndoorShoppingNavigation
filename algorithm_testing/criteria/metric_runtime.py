@@ -13,8 +13,8 @@ def measure_runtime(
     repeats: int = 1
 ) -> float:
     """
-    Misst die Laufzeit des Algorithmus in Sekunden (Durchschnitt über 'repeats' Läufe).
-    Erwartet, dass algorithm_fn ein Dict zurückgibt.
+    Measures the algorithm runtime in seconds (average over 'repeats' runs).
+    Expects algorithm_fn to return a dict.
     """
     start = time.perf_counter()
     for _ in range(repeats):

@@ -161,7 +161,7 @@ if __name__ == "__main__":
         print("No route found.")
         exit()
 
-    print("Best route:", " → ".join(best_order))
+    print("Best route:", " -> ".join(best_order))
     print("Total distance:", round(best_cost, 2))
 
     # Combine full edge path

@@ -1,8 +1,8 @@
  # algorithm_astar_bnb_lowerbound_preload.py
 """
-B&B mit Lower-Bound Pruning.
-Nutzt vorberechnete Distanzen aus CSV für die Reihenfolge.
-Berechnet finale Route mit A* basierend auf der gefundenen Reihenfolge.
+B&B with lower-bound pruning.
+Uses precomputed distances from CSV for the visit order.
+Computes the final route with A* based on the found order.
 """
 import math
 import heapq
@@ -78,10 +78,10 @@ def astar(graph: nx.Graph, origin: Any, destination: Any):
 
 
 # -------------------------------------------------------------
-# Preload Distanzen aus CSV
+# Load precomputed distances from CSV
 # -------------------------------------------------------------
 def load_precomputed_distances(csv_path: str) -> dict:
-    """Lädt vorberechnete Distanzmatrix aus CSV."""
+    """Loads precomputed distance matrix from CSV."""
     dist = {}
     with open(csv_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -96,7 +96,7 @@ def load_precomputed_distances(csv_path: str) -> dict:
 
 
 # -------------------------------------------------------------
-# Lower-Bound Berechnung
+# Lower-bound computation
 # -------------------------------------------------------------
 def compute_lower_bound(remaining: list, checkouts: list, dist: dict) -> float:
     if not remaining:
@@ -119,7 +119,7 @@ def compute_lower_bound(remaining: list, checkouts: list, dist: dict) -> float:
 
 
 # -------------------------------------------------------------
-# Branch & Bound mit Lower-Bound Pruning (nutzt preload dist)
+# Branch & Bound with lower-bound pruning (uses preloaded dist)
 # -------------------------------------------------------------
 def bnb(current, remaining, cost, order_prefix, dist, checkouts, best):
     best_order, best_cost = best
@@ -160,10 +160,10 @@ def bnb(current, remaining, cost, order_prefix, dist, checkouts, best):
 
 
 # -------------------------------------------------------------
-# Route mit A* neu berechnen basierend auf Reihenfolge
+# Recompute route with A* based on visit order
 # -------------------------------------------------------------
 def compute_route_from_order(G: nx.Graph, order: list[str]):
-    """Berechnet die vollständige Route mit A* für eine gegebene Reihenfolge."""
+    """Computes the full route with A* for a given visit order."""
     walk = []
     total_dist = 0.0
 
@@ -190,26 +190,26 @@ _preload_path = os.path.join(
 
 def run_algorithm(G: nx.Graph, entry: str, items: list[str], checkouts: list[str]):
     """
-    B&B mit Lower-Bound Pruning.
-    - Nutzt vorberechnete Distanzen für Reihenfolge
-    - Berechnet finale Route mit A* neu
+    B&B with lower-bound pruning.
+    - Uses precomputed distances for the visit order
+    - Computes the final route with A*
     """
     global _preloaded_dist
 
-    # Preload Distanzen beim ersten Aufruf
+    # Preload distances on first call
     if _preloaded_dist is None:
         if os.path.exists(_preload_path):
             _preloaded_dist = load_precomputed_distances(_preload_path)
         else:
-            # Fallback: keine preload Datei, berechne live
+            # Fallback: no preload file, compute live
             _preloaded_dist = {}
 
-    # Prüfen ob alle benötigten Knoten in preload vorhanden
+    # Check if all required nodes exist in preload
     relevant = [entry] + items + checkouts
     missing = [n for n in relevant if n not in _preloaded_dist]
 
     if missing or not _preloaded_dist:
-        # Fallback: berechne paarweise A* live
+        # Fallback: compute pairwise A* live
         dist = {u: {} for u in relevant}
         for u, v in itertools.permutations(relevant, 2):
             _, d = astar(G, u, v)
@@ -217,7 +217,7 @@ def run_algorithm(G: nx.Graph, entry: str, items: list[str], checkouts: list[str
     else:
         dist = _preloaded_dist
 
-    # B&B für Reihenfolge
+    # B&B for visit order
     if items:
         best_order, _ = bnb(
             entry,
@@ -242,7 +242,7 @@ def run_algorithm(G: nx.Graph, entry: str, items: list[str], checkouts: list[str
             "total_distance": math.inf,
         }
 
-    # Route mit A* neu berechnen basierend auf Reihenfolge
+    # Recompute route with A* based on visit order
     walk, total_dist = compute_route_from_order(G, best_order)
 
     return {

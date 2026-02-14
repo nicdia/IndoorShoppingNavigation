@@ -7,8 +7,8 @@ import networkx as nx
 
 def dijkstra(graph: nx.Graph, origin: str, destination: str):
     """
-    Kürzester Pfad zwischen zwei Knoten mit Dijkstra.
-    Gibt (path, distance) zurück.
+    Shortest path between two nodes using Dijkstra.
+    Returns (path, distance).
     """
     if origin == destination:
         return [origin], 0.0
@@ -51,8 +51,8 @@ def dijkstra(graph: nx.Graph, origin: str, destination: str):
 
 def compute_pairwise_dijkstra(G: nx.Graph, relevant: list[str]):
     """
-    Berechnet für alle geordneten Paare (u, v) in 'relevant'
-    die kürzesten Pfade und Distanzen.
+    Computes shortest paths and distances for all ordered pairs
+    (u, v) in 'relevant'.
     """
     dist = {u: {} for u in relevant}
     spath = {u: {} for u in relevant}
@@ -67,7 +67,7 @@ def compute_pairwise_dijkstra(G: nx.Graph, relevant: list[str]):
 
 def bnb(current, remaining, cost, order_prefix, dist, checkouts, best):
     """
-    Branch-and-Bound zur Bestimmung der optimalen Besuchsreihenfolge.
+    Branch-and-Bound for determining the optimal visit order.
     """
     best_order, best_cost = best
 
@@ -75,7 +75,7 @@ def bnb(current, remaining, cost, order_prefix, dist, checkouts, best):
     if cost >= best_cost:
         return best
 
-    # Wenn keine Items mehr offen sind: besten Checkout anhängen
+    # If no items left: append best checkout
     if not remaining:
         for c in checkouts:
             d = dist[current][c]
@@ -85,7 +85,7 @@ def bnb(current, remaining, cost, order_prefix, dist, checkouts, best):
                 best_cost = total
         return best_order, best_cost
 
-    # Rekursion über verbleibende Items (sortiert nach Entfernung)
+    # Recurse over remaining items (sorted by distance)
     for nxt in sorted(remaining, key=lambda x: dist[current][x]):
         d = dist[current][nxt]
         if not math.isfinite(d):
@@ -106,25 +106,25 @@ def bnb(current, remaining, cost, order_prefix, dist, checkouts, best):
 
 def run_algorithm(G: nx.Graph, entry: str, items: list[str], checkouts: list[str]):
     """
-    Standard-Schnittstelle für die Testbench / Metrics.
+    Standard interface for the testbench / metrics.
 
     Input:
-        G         - NetworkX-Graph mit 'weight' auf den Kanten
-        entry     - Entry-Node-ID (str)
-        items     - Liste von Item-Node-IDs (str)
-        checkouts - Liste von Checkout-Node-IDs (str)
+        G         - NetworkX graph with 'weight' on edges
+        entry     - Entry node ID (str)
+        items     - List of item node IDs (str)
+        checkouts - List of checkout node IDs (str)
 
     Output (Dict):
         {
-            "order": [...],          # z.B. ["21", "41", "61", "14"]
-            "walk": [...],           # komplette Knotenfolge im Graphen
-            "total_distance": float  # Gesamtdistanz entlang 'order'
+            "order": [...],          # e.g. ["21", "41", "61", "14"]
+            "walk": [...],           # complete node sequence in the graph
+            "total_distance": float  # total distance along 'order'
         }
     """
     relevant = [entry] + items + checkouts
     dist, spath = compute_pairwise_dijkstra(G, relevant)
 
-    # Branch & Bound oder direkter Checkout
+    # Branch & Bound or direct checkout
     if items:
         best_order, best_cost = bnb(
             entry,
@@ -139,7 +139,7 @@ def run_algorithm(G: nx.Graph, entry: str, items: list[str], checkouts: list[str
         best_order = [entry] + [min(checkouts, key=lambda c: dist[entry][c])]
         best_cost = dist[entry][best_order[-1]]
 
-    # Kein Pfad gefunden
+    # No path found
     if not best_order:
         return {
             "order": [],
@@ -147,7 +147,7 @@ def run_algorithm(G: nx.Graph, entry: str, items: list[str], checkouts: list[str
             "total_distance": math.inf,
         }
 
-    # Walk aus Teilpfaden zusammensetzen
+    # Assemble walk from partial paths
     walk: list[str] = []
     for a, b in zip(best_order[:-1], best_order[1:]):
         seg = spath[a][b]

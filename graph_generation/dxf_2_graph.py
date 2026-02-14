@@ -124,7 +124,7 @@ for u, v, edata in G.edges(data=True):
 
 # Split edges at nodes for integer-ID 
 def point_on_segment_xy(a, b, c, tol=1e-6):
-    # a, b, c sind Tupel (x,y)
+    # a, b, c are tuples (x, y)
     ax, ay = a
     bx, by = b
     cx, cy = c

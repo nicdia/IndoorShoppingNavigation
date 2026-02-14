@@ -13,7 +13,7 @@ def to_float(v):
     try: return float(v)
     except: return None
 
-# GraphML parsen
+# Parse GraphML
 tree = ET.parse(GRAPHML)
 root = tree.getroot()
 

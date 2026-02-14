@@ -5,12 +5,12 @@ from typing import Any, List, Tuple, Dict
 
 
 # ------------------------------------------------------------
-# Adjazenzmatrix aus NetworkX-Graph aufbauen
+# Build adjacency matrix from NetworkX graph
 # ------------------------------------------------------------
 def build_adjacency_matrix(G: nx.Graph, nodes: list[Any]) -> list[list[float]]:
     """
-    G_mat[i][j] = weight, falls Kante existiert
-                  0.0, falls keine Kante existiert
+    G_mat[i][j] = weight if edge exists,
+                  0.0 if no edge exists
     """
     index = {node: i for i, node in enumerate(nodes)}
     n = len(nodes)
@@ -20,7 +20,7 @@ def build_adjacency_matrix(G: nx.Graph, nodes: list[Any]) -> list[list[float]]:
         i = index[u]
         j = index[v]
         w = float(data.get("weight", 1.0))
-        # ungerichtet
+        # undirected
         G_mat[i][j] = w
         G_mat[j][i] = w
 
@@ -28,7 +28,7 @@ def build_adjacency_matrix(G: nx.Graph, nodes: list[Any]) -> list[list[float]]:
 
 
 # ------------------------------------------------------------
-# Direkte Umsetzung deines Pseudocode-Dijkstra
+# Direct implementation of the pseudocode Dijkstra
 # ------------------------------------------------------------
 def multi_target_dijkstra_from_pseudocode(
     G: nx.Graph,
@@ -36,23 +36,23 @@ def multi_target_dijkstra_from_pseudocode(
     targets: list[Any],
 ) -> Tuple[list[Any] | None, float]:
     """
-    Implementiert deinen C#-ähnlichen Pseudocode exakt:
+    Implements the C#-style pseudocode:
 
     S = entry
-    für jedes T[i] in targets:
-        führe Dijkstra auf Matrix aus
-        rekonstruiere Pfad
-        füge Pfad an L an
+    for each T[i] in targets:
+        run Dijkstra on matrix
+        reconstruct path
+        append path to L
         S = T[i]
 
-    Rückgabe:
-        (L als NodeListe, Gesamtdistanz)
-        oder (None, inf), falls ein Ziel unerreichbar ist
+    Returns:
+        (L as node list, total distance)
+        or (None, inf) if a target is unreachable
     """
     if not targets:
         return [entry], 0.0
 
-    # fixe Node-Reihenfolge
+    # fixed node ordering
     nodes = list(G.nodes())
     index = {node: i for i, node in enumerate(nodes)}
 
@@ -69,7 +69,7 @@ def multi_target_dijkstra_from_pseudocode(
         T_idx = index[t]
 
         # ----------------------------
-        # dein Dijkstra aus Pseudocode
+        # Dijkstra from pseudocode
         # ----------------------------
         distance = [math.inf] * n
         used = [False] * n
@@ -81,7 +81,7 @@ def multi_target_dijkstra_from_pseudocode(
             minDistance = math.inf
             minNode = -1
 
-            # finde unbesuchten Knoten mit minimaler Entfernung
+            # find unvisited node with minimum distance
             for m in range(n):
                 if (not used[m]) and (distance[m] < minDistance):
                     minDistance = distance[m]
@@ -92,7 +92,7 @@ def multi_target_dijkstra_from_pseudocode(
 
             used[minNode] = True
 
-            # relaxiere alle möglichen l
+            # relax all possible edges
             for l in range(n):
                 if G_mat[minNode][l] > 0:
                     shortestToMin = distance[minNode]
@@ -102,11 +102,11 @@ def multi_target_dijkstra_from_pseudocode(
                         distance[l] = totalDist
                         previous[l] = minNode
 
-        # wenn unerreichbar → Algorithmus endet
+        # if unreachable, algorithm terminates
         if distance[T_idx] == math.inf:
             return None, math.inf
 
-        # Pfad Rückverfolgung
+        # Path backtracking
         nodes_path: list[int] = []
         current = T_idx
         while current is not None:
@@ -114,11 +114,11 @@ def multi_target_dijkstra_from_pseudocode(
             current = previous[current]
         nodes_path.reverse()
 
-        # Pfad in L einfügen
+        # Insert path into L
         if not L_indices:
             L_indices.extend(nodes_path)
         else:
-            # Startknoten doppelt vermeiden
+            # avoid duplicate start node
             L_indices.extend(nodes_path[1:])
 
         total_distance += distance[T_idx]
@@ -126,13 +126,13 @@ def multi_target_dijkstra_from_pseudocode(
         # S = T[i]
         S_idx = T_idx
 
-    # Indices → Node-IDs
+    # Indices to node IDs
     walk = [nodes[i] for i in L_indices]
     return walk, total_distance
 
 
 # ------------------------------------------------------------
-# Testbench-kompatible run_algorithm()-Schnittstelle
+# Testbench-compatible run_algorithm() interface
 # ------------------------------------------------------------
 def run_algorithm(
     G: nx.Graph,
@@ -141,13 +141,13 @@ def run_algorithm(
     checkouts: list[str],
 ) -> Dict[str, Any]:
     """
-    Gleiche Schnittstelle wie algorithm_bnb.run_algorithm.
+    Same interface as algorithm_bnb.run_algorithm.
 
-    Verhalten:
-      - Items werden GENAU in gegebener Reihenfolge abgearbeitet
-      - danach wird der beste Checkout mittels demselben Algorithmus gefunden
+    Behavior:
+      - Items are processed in exactly the given order
+      - Then the best checkout is found using the same algorithm
     """
-    # Spezialfall: nichts zu tun
+    # Special case: nothing to do
     if not items and not checkouts:
         return {
             "order": [entry],
@@ -155,7 +155,7 @@ def run_algorithm(
             "total_distance": 0.0,
         }
 
-    # 1) Entry → Items in Reihenfolge
+    # 1) Entry then items in order
     walk_items, dist_items = multi_target_dijkstra_from_pseudocode(G, entry, items)
     if walk_items is None or math.isinf(dist_items):
         return {
@@ -166,7 +166,7 @@ def run_algorithm(
 
     current = items[-1] if items else entry
 
-    # 2) Bester Checkout
+    # 2) Best checkout
     best_checkout = None
     best_dist = math.inf
     best_walk_checkout: list[Any] | None = None
@@ -179,7 +179,7 @@ def run_algorithm(
                 best_dist = d_c
                 best_walk_checkout = w_c
 
-    # Wenn kein Checkout erreichbar ist → nur Items-Pfad
+    # If no checkout reachable, use items path only
     if best_checkout is None or best_walk_checkout is None:
         order = [entry] + items
         walk = walk_items
