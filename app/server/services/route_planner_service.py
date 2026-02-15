@@ -208,9 +208,9 @@ def plan_route_by_names(product_names: List[str], start_node_id: Optional[str] =
     route_nodes: List[str] = []
     planned_cost = math.inf
 
-    # Choose algorithm: EAMDSP for >20 items, Branch & Bound otherwise
+    # Choose algorithm: EAMDSP for >15 items, Branch & Bound otherwise
     if entry_node and (unique_product_nodes or checkout_nodes):
-        if len(unique_product_nodes) > 20:
+        if len(unique_product_nodes) > 15:
             route_nodes, planned_cost = _build_entry_to_checkout_sequence_eamdsp(
                 entry_node, unique_product_nodes, checkout_nodes, dist_cache, path_cache
             )
