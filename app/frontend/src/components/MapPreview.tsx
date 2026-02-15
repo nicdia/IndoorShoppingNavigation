@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { RouteNode, RouteSegment, StorePolygon } from "../types/route";
-import checkoutPinUrl from "../assets/icons/checkout-pin.svg";
 
 // Draws the store layout along with the shopper path and markers.
 
@@ -17,10 +16,6 @@ type MapPreviewProps = {
 
 const CANVAS_LONG_SIDE = 520;
 const PADDING = 24;
-
-// Keep reference to the legacy checkout icon asset while it remains commented out for evaluation.
-const legacyCheckoutPinUrl = checkoutPinUrl;
-void legacyCheckoutPinUrl;
 
 type ProjectedNode = RouteNode & { screenX: number; screenY: number };
 type ProjectedPolygon = StorePolygon & { screenPoints: { x: number; y: number }[] };
@@ -252,23 +247,6 @@ export function MapPreview({
               )}
             </g>
           )}
-          {/*
-          {targetNode && (
-            <g className="target-node" transform={`translate(${targetNode.screenX}, ${targetNode.screenY})`}>
-              <g className="pin-wrapper" transform="rotate(-12)">
-                <image
-                  className="pin-image"
-                  href={checkoutPinUrl}
-                  width={32}
-                  height={48}
-                  x={-17}
-                  y={-38}
-                  preserveAspectRatio="xMidYMax meet"
-                />
-              </g>
-            </g>
-          )}
-          */}
         </svg>
       </div>
     </section>

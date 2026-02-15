@@ -58,7 +58,7 @@ function App() {
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [completed, setCompleted] = useState<boolean[]>([]);
-    const [view, setView] = useState<"start" | "select" | "route">("start");
+  const [view, setView] = useState<"start" | "select" | "route">("start");
   const [layoutPolygons, setLayoutPolygons] = useState<StorePolygon[] | null>(null);
   const [mapPanelSize, setMapPanelSize] = useState<{ width: number; height: number } | null>(null);
 
@@ -647,7 +647,7 @@ function App() {
       return "Checkout";
     }
     if (activeIndex < routeItems.length) {
-      return routeItems[activeIndex]?.productName ?? "Produkt";
+      return routeItems[activeIndex]?.productName ?? "Product";
     }
     return "Checkout";
   })();

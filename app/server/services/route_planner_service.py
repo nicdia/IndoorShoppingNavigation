@@ -1,4 +1,9 @@
 # services/route_planner_service.py
+#
+# Core route planning service.
+# Combines A*, Branch & Bound (with MST lower bound) and EAMDSP-style
+# nearest-neighbour to compute an optimised shopping route.
+#
 from typing import List, Dict, Any, Optional, Tuple
 import csv
 import math
@@ -11,22 +16,33 @@ import heapq
 
 from db.db import fetch_edges, fetch_product_nodes_by_names, fetch_node_coordinates_by_ids
 
-_GRAPH: Optional[nx.DiGraph] = None
-_SHELF_SEGMENTS: Optional[Dict[Tuple[str, str], Dict[str, Optional[str]]]] = None
+# -------------------------------------------------------------
+# Module-level state and configuration
+# -------------------------------------------------------------
+_GRAPH: Optional[nx.DiGraph] = None                          # cached graph
+_SHELF_SEGMENTS: Optional[Dict[Tuple[str, str], Dict[str, Optional[str]]]] = None  # cached shelf metadata
 
-_ENTRY_COORDS_LOADED: bool = False  # print diagnostics: log only once
-_ASTARP_CACHE_DIAG_PRINTED: bool = False  # print diagnostics: log only once
+_ENTRY_COORDS_LOADED: bool = False   # diagnostic flag: log coordinate loading once
+_ASTARP_CACHE_DIAG_PRINTED: bool = False  # diagnostic flag: log A* pair stats once
 
+# Default entry and checkout nodes (overridable via environment variables)
 ENTRY_NODE_ID = os.environ.get("ENTRY_NODE_ID", "21").strip() or None
 _CHECKOUT_RAW = os.environ.get("CHECKOUT_NODE_IDS", "14,15")
 CHECKOUT_NODE_IDS = [n.strip() for n in _CHECKOUT_RAW.split(",") if n.strip()]
 
 
+# -------------------------------------------------------------
+# Shelf segment helpers
+# -------------------------------------------------------------
+
+
 def _resolve_project_root() -> Path:
+    """Returns the top-level project directory (three levels above this file)."""
     return Path(__file__).resolve().parents[3]
 
 
 def _resolve_shelf_segments_path() -> Path:
+    """Resolves path to shelf_segments.csv. Supports env-var override."""
     override = os.environ.get("SHELF_SEGMENTS_PATH")
     if override:
         return Path(override)
@@ -34,6 +50,7 @@ def _resolve_shelf_segments_path() -> Path:
 
 
 def _sanitize_shelf_id(value: Optional[str]) -> Optional[str]:
+    """Strips whitespace from a shelf ID. Returns None for empty or missing values."""
     if value is None:
         return None
     text = str(value).strip()
@@ -41,6 +58,11 @@ def _sanitize_shelf_id(value: Optional[str]) -> Optional[str]:
 
 
 def _load_shelf_segments() -> Dict[Tuple[str, str], Dict[str, Optional[str]]]:
+    """
+    Loads shelf segment metadata from CSV.
+    Maps each edge (source, target) to left/right shelf IDs.
+    Cached after first call.
+    """
     global _SHELF_SEGMENTS
     if _SHELF_SEGMENTS is not None:
         return _SHELF_SEGMENTS
@@ -77,6 +99,10 @@ def _resolve_edge_shelves(
     target: str,
     shelf_segments: Dict[Tuple[str, str], Dict[str, Optional[str]]],
 ) -> Dict[str, Optional[str]]:
+    """
+    Looks up left/right shelf IDs for an edge.
+    If the edge is stored in reverse direction, left and right are swapped.
+    """
     if not shelf_segments:
         return {"left": None, "right": None}
 
@@ -93,6 +119,9 @@ def _resolve_edge_shelves(
     return {"left": None, "right": None}
 
 
+# -------------------------------------------------------------
+# Graph loading
+# -------------------------------------------------------------
 def get_graph() -> nx.DiGraph:
     """
     Directed graph from edges:
@@ -115,12 +144,17 @@ def get_graph() -> nx.DiGraph:
 
 
 def _euclid(a: Dict[str, Any], b: Dict[str, Any]) -> float:
+    """Euclidean distance between two nodes using their x/y coordinates."""
     return hypot(float(a["node_x"]) - float(b["node_x"]),
                  float(a["node_y"]) - float(b["node_y"]))
 
 
+# -------------------------------------------------------------
+# Main route planning entry point
+# -------------------------------------------------------------
 def plan_route_by_names(product_names: List[str], start_node_id: Optional[str] = None) -> Dict[str, Any]:
     """Plans a route starting at the chosen start node and ending at a checkout."""
+    # Fetch product data from the database
     rows = fetch_product_nodes_by_names(product_names)
     products: List[Dict[str, Any]] = []
     for r in rows:
@@ -132,9 +166,10 @@ def plan_route_by_names(product_names: List[str], start_node_id: Optional[str] =
             "node_y": float(r["node_y"]),
         })
 
-    # Map: node_id to product / node info
+    # Map: node_id to product / node info (used for coordinate lookups)
     node_info: Dict[str, Dict[str, Any]] = {p["node_id"]: dict(p) for p in products}
 
+    # Determine start node: use override from request or fall back to default
     entry_override = None
     if start_node_id is not None:
         entry_override = str(start_node_id).strip()
@@ -144,6 +179,7 @@ def plan_route_by_names(product_names: List[str], start_node_id: Optional[str] =
     entry_node = entry_override or ENTRY_NODE_ID
     checkout_nodes = CHECKOUT_NODE_IDS[:]
 
+    # Fetch coordinates for entry/checkout nodes not yet in node_info
     extra_nodes = [n for n in [entry_node, *checkout_nodes] if n and n not in node_info]
     if extra_nodes:
         coords = fetch_node_coordinates_by_ids(extra_nodes)
@@ -156,20 +192,23 @@ def plan_route_by_names(product_names: List[str], start_node_id: Optional[str] =
                 "node_y": xy["y"],
             }
 
+    # Deduplicate product nodes while preserving order
     product_nodes_order = [p["node_id"] for p in products]
     unique_product_nodes = _unique_order_preserving(product_nodes_order)
 
     G = get_graph()
+    # Build list of all relevant nodes (entry + products + checkouts)
     relevant_nodes: List[str] = _unique_order_preserving(
         [entry_node] + unique_product_nodes + checkout_nodes if entry_node else unique_product_nodes + checkout_nodes
     )
 
-    # NEW: A* pairwise
+    # Compute pairwise shortest paths between all relevant nodes
     dist_cache, path_cache = _compute_pairwise_astar_paths(G, relevant_nodes)
 
     route_nodes: List[str] = []
     planned_cost = math.inf
 
+    # Choose algorithm: EAMDSP for >20 items, Branch & Bound otherwise
     if entry_node and (unique_product_nodes or checkout_nodes):
         if len(unique_product_nodes) > 20:
             route_nodes, planned_cost = _build_entry_to_checkout_sequence_eamdsp(
@@ -181,7 +220,7 @@ def plan_route_by_names(product_names: List[str], start_node_id: Optional[str] =
             )
 
     if not route_nodes:
-        # Fallback: use products in input order and append first checkout
+        # Fallback: use products in input order and append nearest checkout
         fallback_nodes = []
         if entry_node:
             fallback_nodes.append(entry_node)
@@ -190,11 +229,12 @@ def plan_route_by_names(product_names: List[str], start_node_id: Optional[str] =
             fallback_nodes.append(checkout_nodes[0])
         route_nodes = _unique_adjacent_preserving(fallback_nodes) if fallback_nodes else unique_product_nodes[:]
 
+    # Build detailed segments (from/to/cost/path) between consecutive route nodes
     segments, way_nodes, total_cost = _build_segments(
         route_nodes, path_cache, dist_cache, node_info
     )
 
-    # Products in visit order
+    # Collect products in visit order for the response
     node_to_products: Dict[str, List[Dict[str, Any]]] = {}
     for p in products:
         node_to_products.setdefault(p["node_id"], []).append({
@@ -208,11 +248,13 @@ def plan_route_by_names(product_names: List[str], start_node_id: Optional[str] =
     for node in route_nodes:
         ordered_products += node_to_products.get(node, [])
 
+    # Build coordinate lookup for all known nodes
     coordinate_sources: Dict[str, Dict[str, float]] = {
         pid: {"x": float(prod["node_x"]), "y": float(prod["node_y"])}
         for pid, prod in node_info.items()
     }
 
+    # Collect all node IDs from walk and segments, fetch missing coordinates
     all_node_ids = set(way_nodes or []) | set(route_nodes)
     for segment in segments:
         for node_id in segment["path"]:
@@ -222,8 +264,10 @@ def plan_route_by_names(product_names: List[str], start_node_id: Optional[str] =
     if missing:
         coordinate_sources.update(fetch_node_coordinates_by_ids(missing))
 
+    # Load shelf segment metadata for edge annotations
     shelf_segments = _load_shelf_segments()
 
+    # Enrich each segment with coordinates, edge lengths and shelf info
     segments_with_coords: List[Dict[str, Any]] = []
     for segment in segments:
         path_ids = list(segment["path"]) if "path" in segment and isinstance(segment["path"], (list, tuple)) else []
@@ -273,6 +317,7 @@ def plan_route_by_names(product_names: List[str], start_node_id: Optional[str] =
         enriched_segment["path_edges"] = edge_annotations
         segments_with_coords.append(enriched_segment)
 
+    # Build deduplicated waypoint coordinate list for the frontend
     seen_waypoints = set()
     waypoint_coordinates = []
     for node_id in way_nodes:
@@ -294,6 +339,7 @@ def plan_route_by_names(product_names: List[str], start_node_id: Optional[str] =
 
 
 def _unique_order_preserving(seq: List[Optional[str]]) -> List[str]:
+    """Removes duplicates from a list while preserving first-occurrence order."""
     seen = set()
     ordered: List[str] = []
     for item in seq:
@@ -306,7 +352,7 @@ def _unique_order_preserving(seq: List[Optional[str]]) -> List[str]:
 
 
 def _unique_adjacent_preserving(seq: List[str]) -> List[str]:
-    """Entfernt nur direkt aufeinanderfolgende Duplikate, damit Entry==erstes Produkt sauber bleibt."""
+    """Removes only consecutive duplicates so that entry == first product stays intact."""
     if not seq:
         return []
     cleaned = [seq[0]]
@@ -321,6 +367,7 @@ def _unique_adjacent_preserving(seq: List[str]) -> List[str]:
 # ======================================================================
 
 def _node_coord(graph: nx.Graph, node: str) -> Optional[Tuple[float, float]]:
+    """Reads (x, y) coordinates of a node, if available."""
     data = graph.nodes.get(node, {})
     if "x" in data and "y" in data:
         return float(data["x"]), float(data["y"])
@@ -328,6 +375,7 @@ def _node_coord(graph: nx.Graph, node: str) -> Optional[Tuple[float, float]]:
 
 
 def _heuristic(graph: nx.Graph, u: str, v: str) -> float:
+    """Euclidean heuristic. Returns 0 if coordinates are missing."""
     cu = _node_coord(graph, u)
     cv = _node_coord(graph, v)
     if cu is None or cv is None:
@@ -338,6 +386,7 @@ def _heuristic(graph: nx.Graph, u: str, v: str) -> float:
 
 
 def _astar(graph: nx.Graph, origin: str, destination: str) -> Tuple[List[str], float]:
+    """Pure A* shortest path (path, distance)."""
     if origin == destination:
         return [origin], 0.0
 
@@ -368,6 +417,7 @@ def _astar(graph: nx.Graph, origin: str, destination: str) -> Tuple[List[str], f
     if destination not in g_score:
         return [], math.inf
 
+    # Reconstruct path from destination back to origin
     path: List[str] = []
     cur = destination
     while cur != origin:
@@ -381,13 +431,18 @@ def _astar(graph: nx.Graph, origin: str, destination: str) -> Tuple[List[str], f
     return path, float(g_score[destination])
 
 
+# ======================================================================
+#  Pairwise A*
+# ======================================================================
+
 def _compute_pairwise_astar_paths(
     graph: nx.DiGraph,
     nodes: List[str],
 ) -> Tuple[Dict[str, Dict[str, float]], Dict[str, Dict[str, List[str]]]]:
+    """Computes shortest paths and distances for all ordered pairs of nodes using A*."""
     global _ENTRY_COORDS_LOADED, _ASTARP_CACHE_DIAG_PRINTED
 
-    # Ensure coords exist for nodes used in A*
+    # Ensure coordinates exist for nodes used in A* heuristic
     missing_xy = [n for n in nodes if "x" not in graph.nodes.get(n, {}) or "y" not in graph.nodes.get(n, {})]
     coords_added = 0
 
@@ -443,13 +498,16 @@ def _bnb_astar(
     checkouts: List[str],
     best: Tuple[Optional[List[str]], float],
 ) -> Tuple[Optional[List[str]], float]:
+    """Branch & Bound with MST-based lower bound pruning."""
     best_order, best_cost = best
 
+    # Pruning with MST lower bound
     lb = _compute_mst_lower_bound(current, remaining, checkouts, dist)
     if cost + lb >= best_cost:
 
         return best_order, best_cost
 
+    # No items left: find best checkout
     if not remaining:
         for c in checkouts:
             d = dist.get(current, {}).get(c, math.inf)
@@ -459,6 +517,7 @@ def _bnb_astar(
                 best_cost = total
         return best_order, best_cost
 
+    # Recurse over remaining items sorted by distance
     for nxt in sorted(remaining, key=lambda x: dist.get(current, {}).get(x, math.inf)):
         d = dist.get(current, {}).get(nxt, math.inf)
         if not math.isfinite(d):
@@ -477,13 +536,16 @@ def _bnb_astar(
     return best_order, best_cost
 
 def _compute_mst_cost(nodes: List[str], dist: Dict[str, Dict[str, float]]) -> float:
+    """Computes MST cost for a set of nodes using Prim's algorithm."""
     if len(nodes) <= 1:
         return 0.0
 
     in_tree = {nodes[0]}
     mst_cost = 0.0
 
+    # Add nodes until all are in the tree
     while len(in_tree) < len(nodes):
+        # Find shortest edge from tree to outside
         best_distance = math.inf
         best_node = None
 
@@ -511,17 +573,26 @@ def _compute_mst_lower_bound(
     checkouts: List[str],
     dist: Dict[str, Dict[str, float]],
 ) -> float:
+    """
+    MST-based lower bound:
+    1. min(current to remaining)
+    2. MST(remaining)
+    3. min(remaining to checkout)
+    """
     if not remaining:
         return 0.0
 
+    # 1. Shortest distance to nearest remaining
     min_to_remaining = min((dist.get(current, {}).get(r, math.inf) for r in remaining), default=math.inf)
     if not math.isfinite(min_to_remaining):
         return math.inf
 
+    # 2. MST over remaining
     mst_cost = _compute_mst_cost(remaining, dist)
     if not math.isfinite(mst_cost):
         return math.inf
 
+    # 3. Shortest distance to checkout
     min_to_checkout = min(
         (dist.get(r, {}).get(c, math.inf) for r in remaining for c in checkouts),
         default=math.inf,
@@ -538,6 +609,7 @@ def _build_entry_to_checkout_sequence_astar_bnb(
     checkouts: List[str],
     dist: Dict[str, Dict[str, float]],
 ) -> Tuple[List[str], float]:
+    """Builds optimal visit order using Branch & Bound with A* distances."""
     if not items:
         return _best_entry_checkout_only(entry, checkouts, dist)
 
@@ -557,6 +629,10 @@ def _build_entry_to_checkout_sequence_astar_bnb(
     return _unique_adjacent_preserving(fallback), math.inf
 
 
+# ======================================================================
+#  EAMDSP-style nearest-neighbour sequence
+# ======================================================================
+
 def _build_entry_to_checkout_sequence_eamdsp(
     entry: str,
     items: List[str],
@@ -564,6 +640,10 @@ def _build_entry_to_checkout_sequence_eamdsp(
     dist: Dict[str, Dict[str, float]],
     path: Dict[str, Dict[str, List[str]]],
 ) -> Tuple[List[str], float]:
+    """
+    Greedy nearest-neighbour sequence (EAMDSP style).
+    Used as a faster alternative when item count exceeds the B&B threshold.
+    """
     if not items:
         return _best_entry_checkout_only(entry, checkouts, dist)
 
@@ -573,6 +653,7 @@ def _build_entry_to_checkout_sequence_eamdsp(
     walk: List[str] = [entry]
     total_cost = 0.0
 
+    # Visit items one by one using nearest neighbour
     while remaining:
         reachable = [n for n in remaining if math.isfinite(dist.get(current, {}).get(n, math.inf))]
         if not reachable:
@@ -595,6 +676,7 @@ def _build_entry_to_checkout_sequence_eamdsp(
         remaining.remove(next_item)
         current = next_item
 
+    # Find nearest checkout from last visited item
     best_checkout = None
     best_checkout_cost = math.inf
     for checkout in checkouts:
@@ -615,6 +697,7 @@ def _best_entry_checkout_only(
     checkouts: List[str],
     dist: Dict[str, Dict[str, float]],
 ) -> Tuple[List[str], float]:
+    """Finds the nearest checkout from the entry node (no items to visit)."""
     best_checkout = None
     best_cost = math.inf
     for checkout in checkouts:
@@ -629,12 +712,21 @@ def _best_entry_checkout_only(
     return [entry], 0.0
 
 
+# ======================================================================
+#  Segment construction
+# ======================================================================
+
 def _build_segments(
     route_nodes: List[str],
     path_cache: Dict[str, Dict[str, List[str]]],
     dist_cache: Dict[str, Dict[str, float]],
     node_info: Dict[str, Dict[str, Any]],
 ) -> Tuple[List[Dict[str, Any]], List[str], float]:
+    """
+    Builds detailed segment list between consecutive route nodes.
+    Each segment contains the full path, cost, and a disconnected flag.
+    Returns (segments, way_nodes, total_cost).
+    """
     segments: List[Dict[str, Any]] = []
     way_nodes: List[str] = []
     total_cost = 0.0
@@ -644,6 +736,7 @@ def _build_segments(
         cost = dist_cache.get(a, {}).get(b, math.inf)
         disconnected = not path_nodes or not math.isfinite(cost)
 
+        # Fallback for disconnected pairs: use Euclidean distance
         if disconnected:
             base = node_info.get(a)
             target = node_info.get(b)
@@ -655,6 +748,7 @@ def _build_segments(
 
         total_cost += cost
 
+        # Merge path into way_nodes, avoiding duplicate junction nodes
         if way_nodes and path_nodes and way_nodes[-1] == path_nodes[0]:
             way_nodes += path_nodes[1:]
         else:
