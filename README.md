@@ -18,18 +18,17 @@ The following commands are for **Windows PowerShell**. Adjust paths as needed.
 
 ## Contents
 
-- [Project goals](#project-goals)
+- [Project Goals](#project-goals)
 - [Architecture](#architecture)
-- [Repository layout](#repository-layout)
-- [Getting started](#getting-started)
+- [Repository Layout](#repository-layout)
+- [Getting Started](#getting-started)
   - [Backend (Flask)](#backend-flask)
   - [Frontend (React + Vite)](#frontend-react--vite)
 - [Configuration](#configuration)
-- [Development workflow (best practices)](#development-workflow-best-practices)
-- [Testing](#testing)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
-
+- [Layout Data](#layout-data)
+- [Usage](#usage)
+- [UML Sequence Diagram (Web App)](#uml-sequence-diagram-mermaid-web-app)
+- [Pipeline Workflow for Algorithm Evaluations](#pipeline-workflow-for-algorithm-evaluations)
 ---
 
 ## Project Goals
