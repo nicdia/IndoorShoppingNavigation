@@ -59,13 +59,12 @@ from ..algorithms.bnb_a_star_modified_lowerbound_preload_astar import (
 )
 from ..algorithms.bnb_a_star_modified_mstbound import run_algorithm as bnb_a_star_modified_mstbound
 
-
 # =========================
 # Central Benchmark Config
 # =========================
 CFG = {
     "SEED": 42,
-    "RUNS": 3,
+    "RUNS": 10,
     "ITEM_COUNTS": list(range(1, 31)),
     "POOL_SIZE": 150,
     "EXCLUDED": {"14", "15", "21"},
@@ -117,87 +116,77 @@ def save_table_as_image(df: pd.DataFrame, filename: str, title: str = "Aggregate
     plt.close(fig)
 
 
-def plot_items_scaling_with_scatter(df: pd.DataFrame, item_counts: List[int], filename: str) -> None:
+def plot_items_scaling_with_errorbars(df: pd.DataFrame, item_counts: List[int], filename: str) -> None:
     agg = (
         df.groupby(["setup", "n_points"])
         .agg(
             runtime_mean=("runtime_seconds", "mean"),
             runtime_std=("runtime_seconds", "std"),
+            num_samples=("runtime_seconds", "count"),
         )
         .reset_index()
     )
 
     fig, ax = plt.subplots(figsize=(14, 6))
 
-    setups = agg["setup"].unique()
+    colors = [
+        "#0072B2",
+        "#E69F00",
+        "#009E73",
+        "#D55E00",
+        "#CC79A7",
+        "#F0E442",
+        "#56B4E9",
+        "#000000",
+    ]
 
-    for setup in setups:
+    setups = agg["setup"].dropna().unique().tolist()
+
+    for idx, setup in enumerate(setups):
         sub = agg[agg["setup"] == setup].sort_values("n_points")
-        x = sub["n_points"].values
-        y = sub["runtime_mean"].values
+        x = sub["n_points"].to_numpy(dtype=float)
+        y = sub["runtime_mean"].to_numpy(dtype=float)
 
-        if len(x) >= 2:
+        if len(x) == 0:
+            continue
+
+        color = colors[idx % len(colors)]
+
+        if len(x) >= 2 and np.all(x > 0) and np.all(y > 0):
             k = compute_slope_loglog(x, y)
-            legend_label = f"{setup}  (k = {k:.2f})"
+            label = f"{setup}  (k = {k:.2f})"
         else:
-            legend_label = f"{setup}  (k = n/a)"
+            label = f"{setup}  (k = n/a)"
 
-        """
-        ax.plot(x, y, marker="o", linewidth=2, label=legend_label)
+        std = sub["runtime_std"].fillna(0.0).to_numpy(dtype=float)
 
-        raw = df[df["setup"] == setup]
-        ax.scatter(raw["n_points"].values, raw["runtime_seconds"].values, s=18, alpha=0.35)
+        lower = np.maximum(y - std, 1e-8)
+        upper = y + std
 
-        std = sub["runtime_std"].fillna(0).values
-        low = np.clip(y - std, a_min=np.min(y) * 1e-6, a_max=None)
-        high = y + std
-        ax.fill_between(x, low, high, alpha=0.2)
-        """
+        yerr = np.vstack((y - lower, upper - y))
 
-        line, = ax.plot(
-            x, y,
-            marker="o",
-            linewidth=2,
-            label=legend_label
-        )
-
-        color = line.get_color()
-
-        """
-        # Scatter with same color
-        raw = df[df["setup"] == setup]
-        ax.scatter(
-            raw["n_points"].values,
-            raw["runtime_seconds"].values,
-            s=18,
-            alpha=0.35,
-            color=color
-        )
-        """
-        std = sub["runtime_std"].fillna(0).values
-        low = np.clip(y - std, a_min=np.min(y) * 1e-6, a_max=None)
-        high = y + std
-        # Std shading with same color, more transparent
-        ax.fill_between(
+        ax.errorbar(
             x,
-            low,
-            high,
-            alpha=0.2,
-            color=color
-)
+            y,
+            yerr=yerr,
+            fmt="o-",
+            color=color,
+            linewidth=2,
+            markersize=5,
+            elinewidth=1,
+            capsize=3,
+            capthick=1,
+            alpha=0.9,
+            label=label,
+        )
 
     ax.set_xscale("log")
     ax.set_yscale("log")
 
-    max_n = max(item_counts)
+    max_n = int(max(item_counts))
 
-    # ticks 1–15
     ticks_small = list(range(1, min(16, max_n + 1)))
-
-    # ticks 20, 30, 40, ...
     ticks_large = list(range(20, max_n + 1, 10))
-
-    # combine and remove duplicates
     xticks = sorted(set(ticks_small + ticks_large))
 
     ax.set_xticks(xticks)
@@ -207,18 +196,22 @@ def plot_items_scaling_with_scatter(df: pd.DataFrame, item_counts: List[int], fi
 
     ax.set_xlim(min(item_counts), max(item_counts))
 
-    agg_min = agg["runtime_mean"].min()
-    agg_max = agg["runtime_mean"].max()
-    ax.set_ylim(agg_min * 0.7, agg_max * 1.3)
+    y_min = float(agg["runtime_mean"].min())
+    y_max = float(agg["runtime_mean"].max())
+    ax.set_ylim(y_min * 0.7, y_max * 1.3)
 
-    ax.set_xlabel("Number of Items (log scale)", fontsize=12)
+    ax.set_xlabel("Number of Nodes (log scale)", fontsize=12)
     ax.set_ylabel("Runtime (seconds, log scale)", fontsize=12)
-    ax.set_title(f"Scaling (log-log): Runtime vs. Number of Items", fontsize=14)
+    ax.set_title("Scaling (log-log): Runtime vs. Number of Nodes", fontsize=14)
 
     ax.grid(True, which="major", alpha=0.4)
     ax.grid(True, which="minor", alpha=0.15, linestyle=":")
 
     ax.legend(fontsize=9, title="Algorithms")
+
+    out_dir = os.path.dirname(filename)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
 
     fig.savefig(filename, dpi=300, bbox_inches="tight")
     plt.close(fig)
@@ -258,7 +251,7 @@ def run_item_benchmarks(
     cutoff_n: Dict[str, int | None] = {name: None for name in algorithms.keys()}
 
     for run_idx in range(runs):
-    # Reset per-run: run 1 does not affect run 2
+    # run 1 does not affect run 2
         active = {name: True for name in algorithms.keys()}
 
         items_perm = valid_items[:]
@@ -267,7 +260,7 @@ def run_item_benchmarks(
 
         for setup, algo_fn in algorithms.items():
             if not active[setup]:
-                continue  # stopped earlier in THIS run only
+                continue
 
             print(f"[Run {run_idx + 1}/{runs}] Running algorithm: {setup}")
 
@@ -301,7 +294,7 @@ def run_item_benchmarks(
                 last_logs[setup] = results
 
                 if t > time_limit_seconds:
-                    cutoff_n[setup] = int(n)  # overwritten across runs
+                    cutoff_n[setup] = int(n)
                     active[setup] = False
                     print(
                         f"  -> Cutoff triggered for {setup} at n={n}: runtime={t:.3f}s "
@@ -325,15 +318,16 @@ def main() -> None:
 
     G = load_graph(CFG["GRAPH_PATH"])
 
-    # Choose algorithms here
+    ### Choose algorithms here ###
+
     ALGORITHMS: Dict[str, callable] = {
-        "nn_dijkstra": nn_dijkstra,
+        # "nn_dijkstra": nn_dijkstra,
         "nn_a_star": nn_a_star,
-        # "EAMDSP": EAMDSP,
-        "MDMSMD": MDMSMD,
+        "EAMDSP": EAMDSP,
+        # "MDMSMD": MDMSMD,
         "bnb_a_star_modified_mstbound": bnb_a_star_modified_mstbound,
         "bnb_a_star_modified_lowerbound": bnb_a_star_modified_lowerbound,
-        "bnb_a_star_modified_lowerbound_preload_astar": bnb_a_star_modified_lowerbound_preload_astar,
+        # "bnb_a_star_modified_lowerbound_preload_astar": bnb_a_star_modified_lowerbound_preload_astar,
         # "bnb_dijkstra": bnb_dijkstra,
         "bnb_a_star": bnb_a_star,
     }
@@ -370,11 +364,12 @@ def main() -> None:
     save_table_as_image(agg, filename=str(table_png_path), title="Aggregated Runtime Table")
     print(f"Table image saved to: {table_png_path}")
 
-    plot_items_scaling_with_scatter(
+    plot_items_scaling_with_errorbars(
         df=df,
         item_counts=CFG["ITEM_COUNTS"],
         filename=str(plot_png_path),
     )
+
 
     print("\n=== Cutoff summary (first n with runtime > 60s) ===")
     for algo in ALGORITHMS.keys():
